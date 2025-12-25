@@ -226,10 +226,8 @@ class Dashboard:
                         
                         # Draw contours (eyes, lips, face oval)
                         # Yondan qaraganda "Face Oval" chizig'i noto'g'ri ko'rinishi mumkin, shuning uchun uni o'chirib turamiz
-                        # Faqat ko'z va lablarni chizamiz
-                        for connection_type in [mp_face_mesh.FACEMESH_LEFT_EYE, 
-                                              mp_face_mesh.FACEMESH_RIGHT_EYE, 
-                                              mp_face_mesh.FACEMESH_LIPS]:
+                        # Faqat lablarni chizamiz (ko'zlarni olib tashladik)
+                        for connection_type in [mp_face_mesh.FACEMESH_LIPS]:
                             mp_drawing.draw_landmarks(
                                 image=frame,
                                 landmark_list=face_landmarks,

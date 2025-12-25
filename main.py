@@ -899,20 +899,7 @@ def main():
                     cv2.line(frame, nose, left_eye, (255, 0, 0), 1)
                     cv2.line(frame, nose, right_eye, (255, 0, 0), 1)
                 
-                if eye_info is not None:
-                    # Ko'z konturlarini chizish (Nuqtalar bilan)
-                    for pt in eye_info["left_eye_points"]:
-                        cv2.circle(frame, pt, 1, (255, 255, 0), -1)
-                    for pt in eye_info["right_eye_points"]:
-                        cv2.circle(frame, pt, 1, (255, 255, 0), -1)
-
-                    # Ko'z qorachig'ini chizish (Katta sariq aylana va qizil markaz)
-                    # Left Iris
-                    cv2.circle(frame, eye_info["left_iris"], 4, (0, 255, 255), 1) # Yellow ring
-                    cv2.circle(frame, eye_info["left_iris"], 2, (0, 0, 255), -1)  # Red dot
-                    # Right Iris
-                    cv2.circle(frame, eye_info["right_iris"], 4, (0, 255, 255), 1) # Yellow ring
-                    cv2.circle(frame, eye_info["right_iris"], 2, (0, 0, 255), -1)  # Red dot
+                # Ko'z chizish (eye_info) olib tashlandi
 
                 # Gaze Direction Visualization (Axis)
                 if pose_data is not None:
