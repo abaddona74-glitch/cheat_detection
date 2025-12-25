@@ -860,16 +860,28 @@ def main():
                     for pt in eye_info["right_eye_points"]:
                         cv2.circle(frame, pt, 1, (255, 255, 0), -1)
 
-                    # Ko'z qorachig'ini chizish (Qizil rangda)
-                    cv2.circle(frame, eye_info["left_iris"], 2, (0, 0, 255), -1)
-                    cv2.circle(frame, eye_info["right_iris"], 2, (0, 0, 255), -1)
+                    # Ko'z qorachig'ini chizish (Katta sariq aylana va qizil markaz)
+                    # Left Iris
+                    cv2.circle(frame, eye_info["left_iris"], 4, (0, 255, 255), 1) # Yellow ring
+                    cv2.circle(frame, eye_info["left_iris"], 2, (0, 0, 255), -1)  # Red dot
+                    # Right Iris
+                    cv2.circle(frame, eye_info["right_iris"], 4, (0, 255, 255), 1) # Yellow ring
+                    cv2.circle(frame, eye_info["right_iris"], 2, (0, 0, 255), -1)  # Red dot
 
                 # Gaze Direction Visualization (Axis)
                 if pose_data is not None:
                     try:
                         rvec, tvec = pose_data
-                        # Axis length
-                        axis_len = 100
+                        
+                        # Calculate angles for display
+                        rmat, _ = cv2.Rodrigues(rvec)
+                        angles, _, _, _, _, _ = cv2.RQDecomp3x3(rmat)
+                        pitch = angles[0] * 360
+                        yaw = angles[1] * 360
+                        roll = angles[2] * 360
+                        
+                        # Axis length (Kattalashtirildi)
+                        axis_len = 200 
                         axis_pts = np.float32([[0,0,0], [0,0,axis_len], [0,axis_len,0], [axis_len,0,0]]).reshape(-1,3)
                         
                         # Camera matrix (must match what was used in solvePnP)
@@ -882,9 +894,23 @@ def main():
                         nose_pt = tuple(imgpts[0].ravel().astype(int))
                         
                         # Draw axes: Z=Blue (Forward), Y=Green (Down), X=Red (Right)
-                        cv2.line(frame, nose_pt, tuple(imgpts[1].ravel().astype(int)), (255,0,0), 3) # Z - Blue
-                        cv2.line(frame, nose_pt, tuple(imgpts[2].ravel().astype(int)), (0,255,0), 2) # Y - Green
-                        cv2.line(frame, nose_pt, tuple(imgpts[3].ravel().astype(int)), (0,0,255), 2) # X - Red
+                        # Z-axis (Forward) - Eng muhimi, qalinroq
+                        z_pt = tuple(imgpts[1].ravel().astype(int))
+                        cv2.arrowedLine(frame, nose_pt, z_pt, (255,0,0), 4) 
+                        
+                        # Y-axis (Down)
+                        y_pt = tuple(imgpts[2].ravel().astype(int))
+                        cv2.line(frame, nose_pt, y_pt, (0,255,0), 2) 
+                        
+                        # X-axis (Right)
+                        x_pt = tuple(imgpts[3].ravel().astype(int))
+                        cv2.line(frame, nose_pt, x_pt, (0,0,255), 2) 
+                        
+                        # Display Angles (Graduslarni ko'rsatish)
+                        angle_text = f"Yaw: {yaw:.1f}  Pitch: {pitch:.1f}"
+                        cv2.putText(frame, angle_text, (nose_pt[0] + 10, nose_pt[1] - 10), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+                                   
                     except Exception as e:
                         pass
 
