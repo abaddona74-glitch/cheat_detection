@@ -285,7 +285,7 @@ class FaceRecognitionSystem:
                         conf = float(box.conf[0])
                         
                         # Class 67 is 'cell phone' in COCO dataset
-                        if cls == 67 and conf > 0.4: 
+                        if cls == 67 and conf > 0.6: 
                             phone_detected = True
                             max_conf = max(max_conf, conf * 100)
                             
@@ -323,7 +323,7 @@ class FaceRecognitionSystem:
             distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)  # Yuzlar orasidagi masofa
             if len(distances) > 0:
                 best_match = np.argmin(distances)  # Eng yaqin yuzni topish
-                if distances[best_match] < 0.6:  # Agar masofa kichik bo'lsa (0.6 ga oshirildi)
+                if distances[best_match] < 0.65:  # Agar masofa kichik bo'lsa (0.65 ga oshirildi)
                     name = self.known_face_names[best_match]  # Nomni olish
         return name  # Yuzning nomini qaytarish
 
