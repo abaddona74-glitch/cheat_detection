@@ -241,7 +241,7 @@ class FaceRecognitionSystem:
             height, width = frame.shape[:2]  # Rasm o'lchamlari
             results = self.face_mesh.process(rgb_frame)  # FaceMesh modelini ishlatish
             if not results.multi_face_landmarks:  # Agar yuzning nuqtalari mavjud bo'lmasa
-                return False
+                return False, None
 
             landmarks = results.multi_face_landmarks[0].landmark  # Yuzning nuqtalarini olish
 
@@ -281,11 +281,11 @@ class FaceRecognitionSystem:
             if success:
                 rotation_mat, _ = cv2.Rodrigues(rotation_vec)  # Boshni aylantirish
                 yaw = np.arctan2(rotation_mat[1, 0], rotation_mat[0, 0]) * 180 / np.pi  # Yaw burchagini hisoblash
-                return abs(yaw) > 50  # Agar orqaga qarayotgan bo'lsa
+                return abs(yaw) > 50, image_points  # Agar orqaga qarayotgan bo'lsa
         except Exception as e:
             print(f"[ERROR] Bosh pozitsiyasini aniqlashda xatolik: {str(e)}")  # Xatolikni chiqarish
-            return False
-        return False
+            return False, None
+        return False, None
 
 import threading
 import time as time_module # time modulini qayta nomlaymiz, chunki pastda time() funksiyasi bor
@@ -437,7 +437,8 @@ def main():
             "face_names": [],
             "phone_detected": False,
             "phone_confidence": 0.0,
-            "backward_looking_status": []
+            "backward_looking_status": [],
+            "landmarks": []
         },
         "running": True,
         "lock": threading.Lock(),
@@ -488,6 +489,7 @@ def main():
                     
                     face_names = []
                     backward_looking_status = []
+                    all_landmarks = []
                     
                     for face_location in face_locations:
                         # 3. Yuzni tanish (Asl kadrda, lekin aniqlangan joylarda)
@@ -495,8 +497,9 @@ def main():
                         face_names.append(name)
                         
                         # 4. Bosh holatini aniqlash
-                        is_looking_backward = face_system.detect_backward_looking(frame_to_process, face_location)
+                        is_looking_backward, landmarks = face_system.detect_backward_looking(frame_to_process, face_location)
                         backward_looking_status.append(is_looking_backward)
+                        all_landmarks.append(landmarks)
                         
                         # Qoidabuzarliklarni yozish
                         if phone_detected:
@@ -513,7 +516,8 @@ def main():
                             "face_names": face_names,
                             "phone_detected": phone_detected,
                             "phone_confidence": phone_confidence,
-                            "backward_looking_status": backward_looking_status
+                            "backward_looking_status": backward_looking_status,
+                            "landmarks": all_landmarks
                         }
                         shared_data["processing_time"] = time() - start_proc
                 except Exception as e:
@@ -550,6 +554,7 @@ def main():
     last_frame_id = -1
     
     last_frame_arrival = time()
+    debug_mode = True # Debug rejimi (nuqtalarni ko'rsatish)
 
     while True:
         # FPS Limitni qo'lda boshqarish
@@ -603,8 +608,13 @@ def main():
         phone_detected = current_results["phone_detected"]
         phone_confidence = current_results["phone_confidence"]
         backward_looking_status = current_results["backward_looking_status"]
+        landmarks_list = current_results.get("landmarks", [])
 
-        for (top, right, bottom, left), name, is_looking_backward in zip(face_locations, face_names, backward_looking_status):
+        # Ro'yxatlar uzunligi mos kelishini ta'minlash
+        if len(landmarks_list) != len(face_locations):
+             landmarks_list = [None] * len(face_locations)
+
+        for (top, right, bottom, left), name, is_looking_backward, landmarks in zip(face_locations, face_names, backward_looking_status, landmarks_list):
             
             # Foydalanuvchi bloklangan yoki yo'qligini tekshirish
             is_blocked = face_system.is_blocked(name)
@@ -618,6 +628,20 @@ def main():
                 color = (0, 165, 255)  # Orqaga qarayotgan bo'lsa, to'q sariq rangda belgilash
 
             cv2.rectangle(frame, (left, top), (right, bottom), color, 2)  # Yuzga to'rtburchak chizish
+
+            # Debug rejimi: Yuz nuqtalarini chizish
+            if debug_mode and landmarks is not None:
+                for point in landmarks:
+                    cv2.circle(frame, (int(point[0]), int(point[1])), 3, (0, 255, 255), -1)
+                # Nuqtalarni tutashtiruvchi chiziqlar (vizualizatsiya uchun)
+                # Burun uchi
+                nose = (int(landmarks[0][0]), int(landmarks[0][1]))
+                # Ko'zlar
+                left_eye = (int(landmarks[2][0]), int(landmarks[2][1]))
+                right_eye = (int(landmarks[3][0]), int(landmarks[3][1]))
+                
+                cv2.line(frame, nose, left_eye, (255, 0, 0), 1)
+                cv2.line(frame, nose, right_eye, (255, 0, 0), 1)
 
             label = f"Name: {name}"
             if is_blocked:
@@ -706,6 +730,9 @@ def main():
             face_system.blocked_users = []
             face_system.save_violations_database()
             print("[INFO] All violations and blocks cleared")
+        elif key == ord('d'): # 'd' tugmasi bosilganda debug rejimini o'zgartirish
+            debug_mode = not debug_mode
+            print(f"[INFO] Debug mode: {'ON' if debug_mode else 'OFF'}")
 
     video_stream.stop()  # Kamerani yopish
     cv2.destroyAllWindows()  # Barcha oynalarni yopish

@@ -6,3 +6,5 @@ __pycache__/
 # Contains local/sensitive camera configuration (device settings, credentials)
 # Not intended to be committed; keep per-developer or per-environment only
 camera_config.json
+cheat_images/
+log.txt
