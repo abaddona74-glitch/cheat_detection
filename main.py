@@ -132,7 +132,7 @@ class FaceRecognitionSystem:
 
     # Qoidabuzarliklarni qayd qilish
     def record_violation(self, name, violation_type):
-        if name == "Notanish":
+        if name == "Unknown":
             return
             
         if name not in self.violations:
@@ -148,8 +148,8 @@ class FaceRecognitionSystem:
         if violation_type == "phone" or self.violations[name]["backward_look"] >= 5:
             if name not in self.blocked_users:
                 self.blocked_users.append(name)
-                self.log_cheat(name, f"BLOKLANGAN: {violation_type} sababi bilan")
-                print(f"[BLOKLANDI] {name} - {violation_type} tufayli bloklandi")
+                self.log_cheat(name, f"BLOCKED: due to {violation_type}")
+                print(f"[BLOCKED] {name} - blocked due to {violation_type}")
                 
         self.save_violations_database()
         
@@ -161,7 +161,7 @@ class FaceRecognitionSystem:
     def log_cheat(self, name, reason):
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Hozirgi vaqtni olish
         with open("log.txt", "a") as f:
-            f.write(f"[{now}] Ism: {name} | Sabab: {reason}\n")
+            f.write(f"[{now}] Name: {name} | Reason: {reason}\n")
 
     # Noqonuniy holatda kadrni saqlash
     def save_cheat_frame(self, frame, name):
@@ -184,7 +184,7 @@ class FaceRecognitionSystem:
 
         # Rasmni saqlash
         cv2.imwrite(filename, frame)
-        print(f"[INFO] Qoidabuzarlik tasvirini saqlash: {filename}")
+        print(f"[INFO] Cheat image saved: {filename}")
 
     # Telefonni aniqlash
     def detect_phone(self, frame):
@@ -211,21 +211,21 @@ class FaceRecognitionSystem:
         face_locations = face_recognition.face_locations(rgb_frame)  # Yuzni topish
 
         if not face_locations:  # Agar yuz topilmasa
-            return False, "Yuz topilmadi"
+            return False, "Face not found"
 
         face_encoding = face_recognition.face_encodings(rgb_frame, face_locations)[0]  # Yuzning kodini olish
         self.known_face_encodings.append(face_encoding)  # Yuzni ma'lumotlar bazasiga qo'shish
         self.known_face_names.append(name)  # Ismni ma'lumotlar bazasiga qo'shish
 
         self.save_face_database()  # Ma'lumotlar bazasini saqlash
-        return True, "Yuz muvaffaqiyatli qo'shildi"  # Muvaffaqiyatli qo'shildi
+        return True, "Face added successfully"  # Muvaffaqiyatli qo'shildi
 
     # Yuzni aniqlash
     def identify_face(self, frame, face_location):
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Rasmni RGB formatiga o'zgartirish
         face_encoding = face_recognition.face_encodings(rgb_frame, [face_location])[0]  # Yuz kodini olish
 
-        name = "Notanish"  # Yuzni aniqlash uchun default nom
+        name = "Unknown"  # Yuzni aniqlash uchun default nom
         if self.known_face_encodings:  # Agar ma'lumotlar bazasida yuzlar bo'lsa
             distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)  # Yuzlar orasidagi masofa
             if len(distances) > 0:
@@ -294,7 +294,7 @@ import time as time_module # time modulini qayta nomlaymiz, chunki pastda time()
 
 # Asosiy dastur
 def main():
-    print("[INFO] Yuz tanib olish tizimi ishga tushmoqda...")
+    print("[INFO] Face recognition system starting...")
     
     # Kamera tanlash oynasini chaqirish
     from camera_selector import select_camera
@@ -305,7 +305,7 @@ def main():
     fps_limit_str = settings["fps_limit"]
     
     if source is None:
-        print("[INFO] Dastur to'xtatildi (kamera tanlanmadi).")
+        print("[INFO] Program stopped (no camera selected).")
         return
 
     # Resolutionni parse qilish
@@ -327,19 +327,19 @@ def main():
 
     face_system = FaceRecognitionSystem()
 
-    print(f"[INFO] Kamera ishga tushmoqda... Manba: {source}")
-    print(f"[INFO] Sozlamalar: {target_width}x{target_height}, FPS Limit: {fps_limit_str}")
+    print(f"[INFO] Camera starting... Source: {source}")
+    print(f"[INFO] Settings: {target_width}x{target_height}, FPS Limit: {fps_limit_str}")
 
     # AMD RX580 yoki boshqa GPU lardan foydalanish uchun OpenCL ni yoqish
     try:
         if cv2.ocl.haveOpenCL():
             cv2.ocl.setUseOpenCL(True)
-            print(f"[INFO] GPU Optimizatsiya (OpenCL): YOQILDI ({cv2.ocl.useOpenCL()})")
-            print(f"[INFO] Qurilma: {cv2.ocl.Device.getDefault().name()}")
+            print(f"[INFO] GPU Optimization (OpenCL): ENABLED ({cv2.ocl.useOpenCL()})")
+            print(f"[INFO] Device: {cv2.ocl.Device.getDefault().name()}")
         else:
-            print("[INFO] OpenCL mavjud emas, CPU ishlatilmoqda.")
+            print("[INFO] OpenCL not available, using CPU.")
     except Exception as e:
-        print(f"[WARNING] OpenCL sozlashda xatolik: {e}")
+        print(f"[WARNING] OpenCL setup error: {e}")
 
     # --- THREADED VIDEO CAPTURE ---
     # Kameradan o'qishni alohida oqimga olamiz.
@@ -357,7 +357,7 @@ def main():
             # Hardware Acceleration
             try:
                 self.stream.set(cv2.CAP_PROP_HW_ACCELERATION, cv2.VIDEO_ACCELERATION_ANY)
-                print(f"[INFO] Hardware Acceleration (Decode): YOQILDI (Mode: {self.stream.get(cv2.CAP_PROP_HW_ACCELERATION)})")
+                print(f"[INFO] Hardware Acceleration (Decode): ENABLED (Mode: {self.stream.get(cv2.CAP_PROP_HW_ACCELERATION)})")
             except: pass
 
             # Resolution
@@ -407,17 +407,17 @@ def main():
             self.stream.release()
 
     # Video oqimni ishga tushirish
-    print("[INFO] Video oqim alohida thread-da ishga tushirilmoqda...")
+    print("[INFO] Video stream starting in separate thread...")
     video_stream = VideoStream(source, target_width, target_height).start()
     
     # Biroz kutamiz, kamera o'nglanib olsin
     time_module.sleep(1.0)
 
     if video_stream.stopped:
-        print(f"[ERROR] Kamera/Stream ochilmadi: {source}")
+        print(f"[ERROR] Camera/Stream failed to open: {source}")
         return
     else:
-        print("[INFO] Kamera muvaffaqiyatli ishga tushdi.")
+        print("[INFO] Camera started successfully.")
 
     training_mode = False  # O'qitish rejimi
     current_name = ""  # Joriy ism
@@ -500,10 +500,10 @@ def main():
                         
                         # Qoidabuzarliklarni yozish
                         if phone_detected:
-                            face_system.log_cheat(name, "Telefon aniqlandi")
+                            face_system.log_cheat(name, "Phone detected")
                             face_system.record_violation(name, "phone")
                         elif is_looking_backward:
-                            face_system.log_cheat(name, "Orqaga qarayapti")
+                            face_system.log_cheat(name, "Looking backward")
                             face_system.record_violation(name, "backward_look")
 
                     # Natijalarni yangilash
@@ -517,7 +517,7 @@ def main():
                         }
                         shared_data["processing_time"] = time() - start_proc
                 except Exception as e:
-                    print(f"[ERROR] Thread xatolik: {e}")
+                    print(f"[ERROR] Thread error: {e}")
             else:
                 time_module.sleep(0.005) # CPU ni bo'shatish uchun kichik pauza
 
@@ -525,10 +525,10 @@ def main():
     process_thread = threading.Thread(target=processing_loop, args=(face_system, shared_data))
     process_thread.daemon = True
     process_thread.start()
-    print("[INFO] Multithreading rejimi ishga tushdi (Asynchronous Processing)")
+    print("[INFO] Multithreading mode started (Asynchronous Processing)")
 
     # Oynani yaratish va sozlash (Fullscreen/Windowed)
-    window_name = "Yuz tanib olish tizimi"
+    window_name = "Face Recognition System"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     
     # Oynani maksimal darajada ochish (Windowed Fullscreen)
@@ -568,12 +568,12 @@ def main():
         if frame is None:
             # Agar kadr bo'lmasa (stream uzilgan yoki hali yuklanmagan)
             if video_stream.stopped:
-                print("Video oqim to'xtadi.")
+                print("Video stream stopped.")
                 break
             
             # Kutish rejimini ko'rsatish
             blank = np.zeros((target_height, target_width, 3), np.uint8)
-            cv2.putText(blank, "KUTILMOQDA...", (50, target_height//2), 
+            cv2.putText(blank, "WAITING...", (50, target_height//2), 
                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
             cv2.imshow(window_name, blank)
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -619,20 +619,20 @@ def main():
 
             cv2.rectangle(frame, (left, top), (right, bottom), color, 2)  # Yuzga to'rtburchak chizish
 
-            label = f"Ism: {name}"
+            label = f"Name: {name}"
             if is_blocked:
-                label += " - BLOKLANGAN!"  # Bloklangan bo'lsa yozuv chiqarish
+                label += " - BLOCKED!"  # Bloklangan bo'lsa yozuv chiqarish
             else:
                 if phone_detected:
-                    label += f" - Telefon ({phone_confidence:.1f}%)"  # Telefon aniqlandi deb yozish
+                    label += f" - Phone ({phone_confidence:.1f}%)"  # Telefon aniqlandi deb yozish
                 if is_looking_backward:
-                    label += " - ORQAGA QARAYAPTI!"  # Orqaga qarash haqida yozish
+                    label += " - LOOKING BACKWARD!"  # Orqaga qarash haqida yozish
                 
                 # Qoidabuzarliklar sonini ko'rsatish
-                if name in face_system.violations and name != "Notanish":
+                if name in face_system.violations and name != "Unknown":
                     backward_count = face_system.violations[name]["backward_look"]
                     if backward_count > 0:
-                        label += f" | Orqaga: {backward_count}/5"
+                        label += f" | Backward: {backward_count}/5"
 
             cv2.putText(frame, label, (left, top - 10),  # Yuzning ustiga yozuv qo'yish
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
@@ -642,13 +642,13 @@ def main():
              current_time = time()
              if current_time - last_save_time > 120:
                  # Kim qoidabuzarlik qilganini topish (birinchi uchraganini olamiz)
-                 violator_name = "Noma'lum"
+                 violator_name = "Unknown"
                  if face_names:
                      violator_name = face_names[0]
                  
                  face_system.save_cheat_frame(frame, violator_name)
                  last_save_time = current_time
-                 print(f"[INFO] Cheating rasmi saqlandi. Keyingi saqlash 2 daqiqadan so'ng bo'ladi.")
+                 print(f"[INFO] Cheat image saved. Next save in 2 minutes.")
 
         # --- DIAGNOSTIKA MA'LUMOTLARI ---
         fps_counter += 1
@@ -694,18 +694,18 @@ def main():
         elif key == ord('t'):  # 't' tugmasi bosilganda o'qitish rejimiga o'tish
             training_mode = not training_mode
             if training_mode:
-                current_name = input("Yangi yuz uchun ism kiriting: ")  # Yangi ismni olish
+                current_name = input("Enter name for new face: ")  # Yangi ismni olish
         elif key == ord('a') and training_mode:  # 'a' tugmasi bosilganda yuzni qo'shish
             success, message = face_system.add_face(frame, current_name)  # Yuzni qo'shish
             print(message)
             training_mode = False  # O'qitish rejimini tugatish
         elif key == ord('r'):  # 'r' tugmasi bosilganda bloklangan foydalanuvchilarni ko'rsatish
-            print("[BLOKLANGAN FOYDALANUVCHILAR]:", face_system.blocked_users)
+            print("[BLOCKED USERS]:", face_system.blocked_users)
         elif key == ord('c'):  # 'c' tugmasi bosilganda barcha qoidabuzarliklarni tozalash
             face_system.violations = {}
             face_system.blocked_users = []
             face_system.save_violations_database()
-            print("[INFO] Barcha qoidabuzarliklar va bloklashlar tozalandi")
+            print("[INFO] All violations and blocks cleared")
 
     video_stream.stop()  # Kamerani yopish
     cv2.destroyAllWindows()  # Barcha oynalarni yopish
