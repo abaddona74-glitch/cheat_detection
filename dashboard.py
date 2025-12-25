@@ -49,6 +49,9 @@ class Dashboard:
         self.btn_start.configure(style="Accent.TButton")
 
     def start_detection(self):
+        # Reset violations for a new session
+        self.face_system.reset_session()
+        
         self.should_start = True
         self.root.destroy()
 

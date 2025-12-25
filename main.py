@@ -156,6 +156,14 @@ class FaceRecognitionSystem:
                 'blocked_users': self.blocked_users
             }, f)
 
+    # Sessiyani yangilash (Reset)
+    def reset_session(self):
+        self.violations = {}
+        self.blocked_users = []
+        self.face_states = {}
+        self.save_violations_database()
+        print("[INFO] Session reset. Violations cleared.")
+
     def process_gaze_state(self, name, is_looking_backward):
         if name == "Unknown": return False, 0
         
