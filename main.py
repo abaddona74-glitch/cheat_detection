@@ -54,6 +54,17 @@ class FaceRecognitionSystem:
                 min_tracking_confidence=0.5
             )
 
+            # Pose (Tana) modelini yaratish
+            print("[DEBUG] Loading Pose model...", flush=True)
+            self.mp_pose = mp.solutions.pose
+            self.pose = self.mp_pose.Pose(
+                static_image_mode=False,
+                model_complexity=1,
+                smooth_landmarks=True,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
+
             # 3D bosh pozitsiyasini aniqlash uchun model nuqtalari
             self.model_points = np.array([
                 (0.0, 0.0, 0.0),
@@ -189,22 +200,82 @@ class FaceRecognitionSystem:
 
     # Telefonni aniqlash
     def detect_phone(self, frame):
-        img = cv2.resize(frame, (224, 224))  # Rasmni o'lchamini o'zgartirish
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Rasmni RGB formatiga o'zgartirish
-        img = tf.keras.applications.mobilenet_v2.preprocess_input(img)  # Modelga moslashtirish
-        img = np.expand_dims(img, axis=0)  # O'lchamni kengaytirish
+        try:
+            if frame is None or frame.size == 0: return False, 0.0
+            img = cv2.resize(frame, (224, 224))  # Rasmni o'lchamini o'zgartirish
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Rasmni RGB formatiga o'zgartirish
+            img = tf.keras.applications.mobilenet_v2.preprocess_input(img)  # Modelga moslashtirish
+            img = np.expand_dims(img, axis=0)  # O'lchamni kengaytirish
 
-        preds = self.phone_model.predict(img, verbose=0)  # Model orqali prognoz qilish
-        decoded = tf.keras.applications.mobilenet_v2.decode_predictions(preds)[0]  # Prognozni dekodlash
+            preds = self.phone_model.predict(img, verbose=0)  # Model orqali prognoz qilish
+            decoded = tf.keras.applications.mobilenet_v2.decode_predictions(preds)[0]  # Prognozni dekodlash
 
-        # Telefonlarga oid tasniflar
-        phone_related = ['cell_phone', 'cellular_telephone', 'mobile_phone',
-                         'hand-held_computer', 'iPod', 'smartphone']
+            # Telefonlarga oid tasniflar
+            phone_related = ['cell_phone', 'cellular_telephone', 'mobile_phone',
+                            'hand-held_computer', 'iPod', 'smartphone']
 
-        for _, label, conf in decoded:
-            if any(phone in label for phone in phone_related) and conf > 0.15:
-                return True, conf * 100  # Telefon aniqlandi
-        return False, 0.0  # Telefon aniqlanmadi
+            for _, label, conf in decoded:
+                if any(phone in label for phone in phone_related) and conf > 0.10: # Threshold 10% ga tushirildi
+                    return True, conf * 100  # Telefon aniqlandi
+            return False, 0.0  # Telefon aniqlanmadi
+        except:
+            return False, 0.0
+
+    def check_hands_for_phone(self, frame, pose_landmarks):
+        h, w, _ = frame.shape
+        phone_detected = False
+        max_conf = 0.0
+        hand_rects = []
+
+        # Chap va O'ng qo'l bilaklari (Wrist)
+        # 15: Left Wrist, 16: Right Wrist
+        # 17: Left Pinky, 19: Left Index
+        # 18: Right Pinky, 20: Right Index
+        
+        hands = [
+            {"wrist": 15, "index": 19, "pinky": 17, "label": "Left"},
+            {"wrist": 16, "index": 20, "pinky": 18, "label": "Right"}
+        ]
+
+        for hand in hands:
+            try:
+                wrist = pose_landmarks.landmark[hand["wrist"]]
+                index = pose_landmarks.landmark[hand["index"]]
+                pinky = pose_landmarks.landmark[hand["pinky"]]
+                
+                # Agar qo'l ko'rinmasa o'tkazib yuboramiz
+                if wrist.visibility < 0.5: continue
+
+                # Qo'l atrofini hisoblash
+                x_coords = [wrist.x, index.x, pinky.x]
+                y_coords = [wrist.y, index.y, pinky.y]
+                
+                min_x, max_x = min(x_coords), max(x_coords)
+                min_y, max_y = min(y_coords), max(y_coords)
+                
+                # Kengroq qamrab olish (margin)
+                margin = 0.15 # 15% margin
+                min_x = max(0, min_x - margin)
+                max_x = min(1, max_x + margin)
+                min_y = max(0, min_y - margin)
+                max_y = min(1, max_y + margin)
+                
+                # Pixel koordinatalari
+                x1, y1 = int(min_x * w), int(min_y * h)
+                x2, y2 = int(max_x * w), int(max_y * h)
+                
+                # Crop qilish
+                if x2 > x1 and y2 > y1:
+                    hand_crop = frame[y1:y2, x1:x2]
+                    detected, conf = self.detect_phone(hand_crop)
+                    if detected:
+                        phone_detected = True
+                        max_conf = max(max_conf, conf)
+                        hand_rects.append((x1, y1, x2, y2))
+            except:
+                pass
+        
+        return phone_detected, max_conf, hand_rects
 
     # Yuzni qo'shish
     def add_face(self, frame, name):
@@ -231,7 +302,7 @@ class FaceRecognitionSystem:
             distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)  # Yuzlar orasidagi masofa
             if len(distances) > 0:
                 best_match = np.argmin(distances)  # Eng yaqin yuzni topish
-                if distances[best_match] < 0.5:  # Agar masofa kichik bo'lsa
+                if distances[best_match] < 0.6:  # Agar masofa kichik bo'lsa (0.6 ga oshirildi)
                     name = self.known_face_names[best_match]  # Nomni olish
         return name  # Yuzning nomini qaytarish
 
@@ -482,7 +553,9 @@ def main():
             "backward_looking_status": [],
             "landmarks": [],
             "eye_data": [],
-            "face_mesh_landmarks": [] # To'liq mesh uchun
+            "face_mesh_landmarks": [], # To'liq mesh uchun
+            "pose_landmarks": None, # Tana uchun
+            "hand_rects": [] # Telefon aniqlangan qo'l sohalari
         },
         "running": True,
         "lock": threading.Lock(),
@@ -528,9 +601,22 @@ def main():
                         left = int(left * scale_factor)
                         face_locations.append((top, right, bottom, left))
                     
-                    # 2. Telefonni aniqlash (Asl kadrda, chunki u o'zi resize qiladi)
-                    phone_detected, phone_confidence = face_system.detect_phone(frame_to_process)
+                    # 2. Pose (Tana) aniqlash
+                    pose_results = face_system.pose.process(rgb_small_frame) # Kichik kadrda tezroq
+                    pose_landmarks = None
+                    hand_rects = []
                     
+                    if pose_results.pose_landmarks:
+                        pose_landmarks = pose_results.pose_landmarks
+                        # Telefonni qo'llarda qidirish (Asl kadrda)
+                        # Pose koordinatalarini asl o'lchamga o'tkazish kerak emas, chunki mediapipe 0-1 oraliqda qaytaradi
+                        # Lekin biz crop qilish uchun asl kadrni ishlatamiz
+                        phone_detected, phone_confidence, hand_rects = face_system.check_hands_for_phone(frame_to_process, pose_landmarks)
+                    
+                    # Agar qo'llarda topilmasa, butun kadrni tekshirib ko'ramiz (Fallback)
+                    if not phone_detected:
+                        phone_detected, phone_confidence = face_system.detect_phone(frame_to_process)
+
                     face_names = []
                     backward_looking_status = []
                     all_landmarks = []
@@ -567,7 +653,9 @@ def main():
                             "backward_looking_status": backward_looking_status,
                             "landmarks": all_landmarks,
                             "eye_data": all_eye_data,
-                            "face_mesh_landmarks": all_mesh_landmarks
+                            "face_mesh_landmarks": all_mesh_landmarks,
+                            "pose_landmarks": pose_landmarks,
+                            "hand_rects": hand_rects
                         }
                         shared_data["processing_time"] = time() - start_proc
                 except Exception as e:
@@ -661,6 +749,21 @@ def main():
         landmarks_list = current_results.get("landmarks", [])
         eye_data_list = current_results.get("eye_data", [])
         mesh_landmarks_list = current_results.get("face_mesh_landmarks", [])
+        pose_landmarks = current_results.get("pose_landmarks", None)
+        hand_rects = current_results.get("hand_rects", [])
+
+        # Tana (Pose) chizish
+        if pose_landmarks:
+            mp_drawing.draw_landmarks(
+                frame,
+                pose_landmarks,
+                mp.solutions.pose.POSE_CONNECTIONS,
+                landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
+
+        # Telefon aniqlangan qo'l sohalarini chizish
+        for (hx1, hy1, hx2, hy2) in hand_rects:
+            cv2.rectangle(frame, (hx1, hy1), (hx2, hy2), (0, 0, 255), 3)
+            cv2.putText(frame, "PHONE DETECTED", (hx1, hy1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
         # Ro'yxatlar uzunligi mos kelishini ta'minlash
         if len(landmarks_list) != len(face_locations):
