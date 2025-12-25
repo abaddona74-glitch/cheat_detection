@@ -212,12 +212,17 @@ class Dashboard:
                 if results.multi_face_landmarks:
                     for face_landmarks in results.multi_face_landmarks:
                         # Draw the mesh (tesselation) - "Cells"
+                        # Color: #9aeffa -> BGR(250, 239, 154)
+                        landmark_spec = mp_drawing.DrawingSpec(color=(250, 239, 154), thickness=1, circle_radius=1)
+                        # Color: #9cdeff -> BGR(255, 222, 156)
+                        connection_spec = mp_drawing.DrawingSpec(color=(255, 222, 156), thickness=1, circle_radius=1)
+
                         mp_drawing.draw_landmarks(
                             image=frame,
                             landmark_list=face_landmarks,
                             connections=mp_face_mesh.FACEMESH_TESSELATION,
-                            landmark_drawing_spec=None,
-                            connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_tesselation_style())
+                            landmark_drawing_spec=landmark_spec,
+                            connection_drawing_spec=connection_spec)
                         
                         # Draw contours (eyes, lips, face oval)
                         # Yondan qaraganda "Face Oval" chizig'i noto'g'ri ko'rinishi mumkin, shuning uchun uni o'chirib turamiz
