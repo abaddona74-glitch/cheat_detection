@@ -124,8 +124,15 @@ class Dashboard:
                 
             success, message = self.face_system.add_face(frame, name)
             if success:
-                messagebox.showinfo("Success", f"Face registered for {name}!")
-                reg_window.destroy()
+                self.capture_step += 1
+                self.captured_images += 1
+                
+                if self.capture_step > 2:
+                    messagebox.showinfo("Success", f"Face registered successfully! (3 angles)")
+                    reg_window.destroy()
+                else:
+                    # Keyingi bosqichga o'tish
+                    pass
             else:
                 messagebox.showerror("Error", message)
 
@@ -173,12 +180,15 @@ class Dashboard:
                         # Draw contours (eyes, lips, face oval)
                         # Yondan qaraganda "Face Oval" chizig'i noto'g'ri ko'rinishi mumkin, shuning uchun uni o'chirib turamiz
                         # Faqat ko'z va lablarni chizamiz
-                        mp_drawing.draw_landmarks(
-                            image=frame,
-                            landmark_list=face_landmarks,
-                            connections=mp_face_mesh.FACEMESH_IRISES, # Faqat ko'zlar
-                            landmark_drawing_spec=None,
-                            connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style())
+                        for connection_type in [mp_face_mesh.FACEMESH_LEFT_EYE, 
+                                              mp_face_mesh.FACEMESH_RIGHT_EYE, 
+                                              mp_face_mesh.FACEMESH_LIPS]:
+                            mp_drawing.draw_landmarks(
+                                image=frame,
+                                landmark_list=face_landmarks,
+                                connections=connection_type,
+                                landmark_drawing_spec=None,
+                                connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style())
 
                         # Calculate face size for distance guidance
                         h, w, _ = frame.shape
