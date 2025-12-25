@@ -284,18 +284,18 @@ class Dashboard:
                             if y_angle < 15: # Mirror effect: Looking Left is positive Yaw? No, let's check.
                                 # Usually +Yaw is Right, -Yaw is Left. But with Mirror...
                                 # Let's just say "Turn Head Left" and check for significant angle
-                                status_text = "Turn Head LEFT ->"
+                                status_text = "Turn Head RIGHT ->"
                                 status_color = "#00AAFF"
                             else:
-                                status_text = "Hold still (Left Side)."
+                                status_text = "Hold still (Right Side)."
                                 status_color = "green"
                                 is_perfect = True
                         elif self.capture_step == 2: # Right
                             if y_angle > -15:
-                                status_text = "Turn Head RIGHT <-"
+                                status_text = "Turn Head LEFT <-"
                                 status_color = "#00AAFF"
                             else:
-                                status_text = "Hold still (Right Side)."
+                                status_text = "Hold still (Left Side)."
                                 status_color = "green"
                                 is_perfect = True
 

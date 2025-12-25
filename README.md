@@ -1,78 +1,83 @@
-# 🚨 Imtihon Nazorati Tizimi (Cheat Detection System)
+# 🚨 AI Cheat Detection System
 
-Ushbu loyiha imtihon jarayonlarida qoidabuzarliklarni (cheating) avtomatik aniqlash uchun mo‘ljallangan sun'iy intellekt tizimidir. Tizim kompyuter ko'rish (Computer Vision) texnologiyalaridan foydalanib, real vaqt rejimida talabalarni kuzatadi va shubhali holatlarni qayd etadi.
+An advanced automated proctoring system designed to detect suspicious behavior during exams using Computer Vision and AI. The system monitors students in real-time, tracking head pose, gaze direction, and detecting prohibited objects like mobile phones.
 
-## ✨ Asosiy Imkoniyatlar
+## ✨ Key Features
 
-*   **👤 Yuzni Tanib Olish (Face Recognition):** Talabalarni yuzidan taniydi va ro'yxatga oladi.
-*   **📱 Telefonni Aniqlash (Phone Detection):** Kadrdan mobil telefon aniqlansa, qoidabuzarlik sifatida belgilaydi.
-*   **👀 Nigoh va Bosh Harakatini Kuzatish (Head Pose Estimation):** Talaba orqaga yoki yon tomonga qarasa, ogohlantirish beradi.
-*   **🚫 Avtomatik Bloklash:** Qoidabuzarliklar soni belgilangan limitdan oshsa, foydalanuvchi "bloklanganlar" ro'yxatiga tushadi.
-*   **📊 Hisobot va Tahlil:** Barcha qoidabuzarliklar ma'lumotlar bazasida saqlanadi va ularni vizual ko'rish imkoniyati mavjud.
+*   **👤 Advanced Face Registration:** 
+    *   **3-Step Process:** Captures Front, Left, and Right angles for robust recognition.
+    *   **Smart UI:** Provides real-time feedback (distance, angle) and auto-captures when the pose is perfect.
+*   **📱 YOLOv8 Phone Detection:** 
+    *   Uses the state-of-the-art **YOLOv8** model to detect mobile phones with high accuracy.
+    *   Visualizes detected phones with a red mesh grid.
+*   **👀 Gaze & Head Pose Tracking:** 
+    *   **3D Axis Visualization:** Shows gaze direction with large colored arrows (Blue=Forward, Green=Down, Red=Right).
+    *   **Degree Display:** Real-time display of Yaw and Pitch angles.
+    *   **Iris Tracking:** Precise pupil tracking with visual indicators.
+*   **🧠 Smart Violation Logic:**
+    *   **State Machine:** Distinguishes between quick glances and prolonged looking away.
+    *   **5-Second Rule:** Looking away for more than 5 seconds triggers a "Looking Backward" violation.
+    *   **Glance Detection:** Repeated quick glances are also flagged.
+*   **🖥️ Admin Dashboard:**
+    *   User-friendly GUI to manage registrations and view databases.
+    *   **Violations Table:** View detailed logs of phone detections and gaze violations.
+    *   **Blocked Status:** Automatically blocks users after repeated violations.
 
-## 🛠 Talablar
-
-Loyihani ishga tushirish uchun quyidagi dasturlar o'rnatilgan bo'lishi kerak:
+## 🛠 Requirements
 
 *   Python 3.8+
-*   Visual Studio Build Tools (Windows uchun `dlib` kutubxonasini o'rnatishda kerak bo'lishi mumkin)
+*   Webcam
 
-## 🚀 O‘rnatish
+## 🚀 Installation
 
-1.  **Loyihani yuklab oling:**
+1.  **Clone the repository:**
     ```bash
     git clone <repository-url>
     cd cheat_detection
     ```
 
-2.  **Virtual muhit yarating (tavsiya etiladi):**
-    ```bash
-    python -m venv venv
-    # Windows:
-    venv\Scriptsctivate
-    # Linux/macOS:
-    source venv/bin/activate
-    ```
-
-3.  **Kerakli kutubxonalarni o‘rnating:**
+2.  **Install dependencies:**
     ```bash
     pip install -r requirements.txt
     ```
+    *Note: This will install `ultralytics` (for YOLOv8), `mediapipe`, `face_recognition`, `opencv-python`, and `tkinter`.*
 
-## 🖥 Ishlatish
+## 🖥 Usage
 
-### 1. Tizimni ishga tushirish
-Asosiy kuzatuv dasturini ishga tushirish uchun:
+### 1. Start the System
+Run the main script to open the Control Panel:
 ```bash
 python main.py
 ```
-Dastur ishga tushgach, kamera ochiladi va kuzatuv boshlanadi.
 
-### 2. Boshqaruv tugmalari (Hotkeys)
-Dastur ishlab turgan vaqtda quyidagi tugmalardan foydalanishingiz mumkin:
+### 2. Dashboard Controls
+*   **Register New Face:** Opens the registration wizard. Follow the on-screen instructions to capture your face from 3 angles.
+*   **View Faces:** Manage the list of registered users.
+*   **View Violations:** See a table of all recorded cheating attempts.
+*   **START DETECTION:** Launches the main monitoring window.
 
-| Tugma | Vazifa |
-| :--- | :--- |
-| **`q`** | Dasturni to‘xtatish va chiqish. |
-| **`t`** | **O‘qitish rejimi (Training Mode):** Yangi talabani bazaga qo'shish uchun. Ism kiritish so'raladi. |
-| **`a`** | (O'qitish rejimida) Joriy kadrni yuz sifatida saqlash va bazaga qo'shish. |
-| **`r`** | Bloklangan foydalanuvchilar ro‘yxatini konsolga chiqarish. |
-| **`c`** | Barcha qoidabuzarliklar va bloklanganlar tarixini tozalash (Reset). |
+### 3. Monitoring Window
+Once detection starts:
+*   **Green Box:** Normal behavior.
+*   **Orange Box:** Looking away (Warning/Violation).
+*   **Red Box:** Phone detected.
+*   **Purple Box:** User is BLOCKED.
 
-### 3. Natijalarni ko'rish
-Yig'ilgan ma'lumotlar va qoidabuzarliklar tarixini ko'rish uchun:
-```bash
-python open.py
-```
-Bu buyruq `pandasgui` orqali ma'lumotlarni jadval ko'rinishida ochadi.
+### 4. Debug Visualizations
+The system draws several overlays for debugging:
+*   **Face Mesh:** Tesselation and contours of the face.
+*   **Skeleton:** Body pose and hand tracking.
+*   **Gaze Arrows:** 3D vectors showing head direction.
+*   **Phone Grid:** Red mesh over detected phones.
 
-## 📂 Loyiha Tuzilishi
+## 📂 Project Structure
 
-*   `main.py`: Asosiy dastur kodi (kamera, aniqlash, logika).
-*   `open.py`: Saqlangan ma'lumotlarni (`.pkl`) ko'rish uchun yordamchi dastur.
-*   `face_database.pkl`: Ro'yxatdan o'tgan yuzlar bazasi.
-*   `violations_database.pkl`: Qoidabuzarliklar tarixi.
-*   `requirements.txt`: Kerakli kutubxonalar ro'yxati.
+*   `main.py`: Core logic, detection loop, and visualization.
+*   `dashboard.py`: GUI for registration and management.
+*   `face_database.pkl`: Encoded face data.
+*   `violations_database.pkl`: Database of recorded violations.
+*   `requirements.txt`: Python dependencies.
 
-## ⚠️ Eslatma
-Agar `dlib` yoki `face_recognition` o'rnatishda xatolik yuz bersa, avval `cmake` ni o'rnating va C++ kompilyatorlari mavjudligini tekshiring.
+## ⚠️ Troubleshooting
+*   **YOLO Error:** If you see an error about `yolov8n.pt`, ensure you have an internet connection on the first run to download the model weights.
+*   **Camera:** If the camera doesn't open, check the `camera_config.json` or ensure no other app is using the webcam.
