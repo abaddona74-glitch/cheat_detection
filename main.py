@@ -157,41 +157,53 @@ class FaceRecognitionSystem:
             }, f)
 
     def process_gaze_state(self, name, is_looking_backward):
-        if name == "Unknown": return False
+        if name == "Unknown": return False, 0
         
         current_time = time()
         if name not in self.face_states:
-            self.face_states[name] = {'state': 'NORMAL', 'start_time': 0}
+            self.face_states[name] = {
+                'state': 'NORMAL', 
+                'start_time': 0,
+                'last_violation_time': 0
+            }
             
         state_info = self.face_states[name]
         state = state_info['state']
-        
+        countdown_val = 0
         violation_confirmed = False
         
         if is_looking_backward:
             if state == 'NORMAL':
-                # Endi qarashni boshladi
-                self.face_states[name]['state'] = 'WARNING'
+                # Start looking away
+                self.face_states[name]['state'] = 'LOOKING_AWAY'
                 self.face_states[name]['start_time'] = current_time
-            elif state == 'WARNING':
-                # Qarab turibdi
+                countdown_val = 5
+            elif state == 'LOOKING_AWAY':
                 elapsed = current_time - state_info['start_time']
-                if elapsed >= 5.0: # 5 sekund qarab tursa
-                    violation_confirmed = True
-                    self.face_states[name]['state'] = 'VIOLATED' # Violation yozildi, endi kutamiz
-        else:
-            # Normal holatga qaytdi
-            if state == 'WARNING':
-                # Qarab turib qaytdi (Glance) - bu ham violation
-                violation_confirmed = True
-                self.face_states[name]['state'] = 'NORMAL'
-            elif state == 'VIOLATED':
-                # Uzoq qarab turib qaytdi
-                self.face_states[name]['state'] = 'NORMAL'
-            else:
-                self.face_states[name]['state'] = 'NORMAL'
+                countdown_val = max(0, 5 - int(elapsed))
                 
-        return violation_confirmed
+                if elapsed >= 5.0:
+                    # 5 seconds passed
+                    last_viol = state_info.get('last_violation_time', 0)
+                    
+                    if last_viol == 0:
+                        # First violation after 5s
+                        violation_confirmed = True
+                        self.face_states[name]['last_violation_time'] = current_time
+                    else:
+                        # Subsequent violations every 15s
+                        interval_elapsed = current_time - last_viol
+                        if interval_elapsed >= 15.0:
+                            violation_confirmed = True
+                            self.face_states[name]['last_violation_time'] = current_time
+        else:
+            # Returned to normal
+            self.face_states[name]['state'] = 'NORMAL'
+            self.face_states[name]['start_time'] = 0
+            self.face_states[name]['last_violation_time'] = 0 # Reset interval logic
+            countdown_val = 0
+                
+        return violation_confirmed, countdown_val
 
     # Qoidabuzarliklarni qayd qilish
     def record_violation(self, name, violation_type):
@@ -628,6 +640,7 @@ def main():
                     all_eye_data = []
                     all_mesh_landmarks = []
                     all_pose_data = []
+                    all_countdowns = []
                     
                     for face_location in face_locations:
                         # 3. Yuzni tanish (Asl kadrda, lekin aniqlangan joylarda)
@@ -648,7 +661,10 @@ def main():
                             face_system.record_violation(name, "phone")
                         
                         # Gaze violation logic with state machine
-                        if face_system.process_gaze_state(name, is_looking_backward):
+                        violation_confirmed, countdown_val = face_system.process_gaze_state(name, is_looking_backward)
+                        all_countdowns.append(countdown_val)
+                        
+                        if violation_confirmed:
                             face_system.log_cheat(name, "Looking backward")
                             face_system.record_violation(name, "backward_look")
 
@@ -666,7 +682,8 @@ def main():
                             "head_pose_data": all_pose_data,
                             "pose_landmarks": pose_landmarks,
                             "hand_landmarks": hand_landmarks_list,
-                            "hand_rects": hand_rects
+                            "hand_rects": hand_rects,
+                            "countdowns": all_countdowns
                         }
                         shared_data["processing_time"] = time() - start_proc
                 except Exception as e:
@@ -764,6 +781,7 @@ def main():
         pose_landmarks = current_results.get("pose_landmarks", None)
         hand_landmarks_list = current_results.get("hand_landmarks", [])
         hand_rects = current_results.get("hand_rects", [])
+        countdowns_list = current_results.get("countdowns", [])
 
         # Tana (Pose) chizish
         if pose_landmarks:
@@ -806,8 +824,10 @@ def main():
              mesh_landmarks_list = [None] * len(face_locations)
         if len(head_pose_data_list) != len(face_locations):
              head_pose_data_list = [None] * len(face_locations)
+        if len(countdowns_list) != len(face_locations):
+             countdowns_list = [0] * len(face_locations)
 
-        for (top, right, bottom, left), name, is_looking_backward, landmarks, eye_info, mesh_landmarks, pose_data in zip(face_locations, face_names, backward_looking_status, landmarks_list, eye_data_list, mesh_landmarks_list, head_pose_data_list):
+        for (top, right, bottom, left), name, is_looking_backward, landmarks, eye_info, mesh_landmarks, pose_data, countdown in zip(face_locations, face_names, backward_looking_status, landmarks_list, eye_data_list, mesh_landmarks_list, head_pose_data_list, countdowns_list):
             
             # Foydalanuvchi bloklangan yoki yo'qligini tekshirish
             is_blocked = face_system.is_blocked(name)
@@ -821,6 +841,18 @@ def main():
                 color = (0, 165, 255)  # Orqaga qarayotgan bo'lsa, to'q sariq rangda belgilash
 
             cv2.rectangle(frame, (left, top), (right, bottom), color, 2)  # Yuzga to'rtburchak chizish
+            
+            # Countdown Visualization
+            if countdown > 0:
+                # Draw countdown text in center of face box
+                center_x = left + (right - left) // 2
+                center_y = top + (bottom - top) // 2
+                cv2.putText(frame, str(countdown), (center_x - 20, center_y + 20), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 255), 5)
+                cv2.putText(frame, "LOOKING AWAY!", (left, top - 40), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+            # Debug rejimi: Yuz nuqtalarini chizish
 
             # Debug rejimi: Yuz nuqtalarini chizish
             if debug_mode:
