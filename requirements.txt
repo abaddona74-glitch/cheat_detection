@@ -6,3 +6,4 @@ pickle-mixin
 mediapipe==0.10.21
 pandas
 pandasgui
+ultralytics

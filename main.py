@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import tensorflow as tf
+from ultralytics import YOLO
 import face_recognition
 import pickle
 import os
@@ -86,15 +86,13 @@ class FaceRecognitionSystem:
                 (28.9, -28.9, -24.1)
             ], dtype=np.float32)
 
-            # Telefonni aniqlash uchun mobil model (MobileNetV2)
-            print("[DEBUG] Loading MobileNetV2 model...", flush=True)
-            self.phone_model = tf.keras.applications.MobileNetV2(
-                input_shape=(224, 224, 3),
-                alpha=1.0,
-                include_top=True,
-                weights='imagenet',
-                pooling='avg'
-            )
+            # Telefonni aniqlash uchun YOLOv8 modeli
+            print("[DEBUG] Loading YOLOv8 model...", flush=True)
+            try:
+                self.phone_model = YOLO("yolov8n.pt")
+            except Exception as e:
+                print(f"[ERROR] Could not load YOLO model: {e}")
+                self.phone_model = None
             print("[DEBUG] System initialized successfully.", flush=True)
         except Exception as e:
             # Xatolikni faylga yozish
@@ -209,65 +207,32 @@ class FaceRecognitionSystem:
         cv2.imwrite(filename, frame)
         print(f"[INFO] Cheat image saved: {filename}")
 
-    # Telefonni aniqlash
-    def detect_phone(self, frame):
-        try:
-            if frame is None or frame.size == 0: return False, 0.0
-            img = cv2.resize(frame, (224, 224))  # Rasmni o'lchamini o'zgartirish
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Rasmni RGB formatiga o'zgartirish
-            img = tf.keras.applications.mobilenet_v2.preprocess_input(img)  # Modelga moslashtirish
-            img = np.expand_dims(img, axis=0)  # O'lchamni kengaytirish
-
-            preds = self.phone_model.predict(img, verbose=0)  # Model orqali prognoz qilish
-            decoded = tf.keras.applications.mobilenet_v2.decode_predictions(preds)[0]  # Prognozni dekodlash
-
-            # Telefonlarga oid tasniflar
-            phone_related = ['cell_phone', 'cellular_telephone', 'mobile_phone',
-                            'hand-held_computer', 'iPod', 'smartphone']
-
-            for _, label, conf in decoded:
-                if any(phone in label for phone in phone_related) and conf > 0.10: # Threshold 10% ga tushirildi
-                    return True, conf * 100  # Telefon aniqlandi
-            return False, 0.0  # Telefon aniqlanmadi
-        except:
-            return False, 0.0
-
     def check_hands_for_phone(self, frame, hand_landmarks_list):
-        h, w, _ = frame.shape
         phone_detected = False
         max_conf = 0.0
-        hand_rects = []
+        hand_rects = [] # Will contain phone bounding boxes
 
-        for hand_landmarks in hand_landmarks_list:
+        if self.phone_model:
             try:
-                # Qo'l atrofini hisoblash
-                x_coords = [lm.x for lm in hand_landmarks.landmark]
-                y_coords = [lm.y for lm in hand_landmarks.landmark]
+                # YOLOv8 inference on the full frame
+                results = self.phone_model(frame, verbose=False)
                 
-                min_x, max_x = min(x_coords), max(x_coords)
-                min_y, max_y = min(y_coords), max(y_coords)
-                
-                # Kengroq qamrab olish (margin)
-                margin = 0.1 # 10% margin
-                min_x = max(0, min_x - margin)
-                max_x = min(1, max_x + margin)
-                min_y = max(0, min_y - margin)
-                max_y = min(1, max_y + margin)
-                
-                # Pixel koordinatalari
-                x1, y1 = int(min_x * w), int(min_y * h)
-                x2, y2 = int(max_x * w), int(max_y * h)
-                
-                # Crop qilish
-                if x2 > x1 and y2 > y1:
-                    hand_crop = frame[y1:y2, x1:x2]
-                    detected, conf = self.detect_phone(hand_crop)
-                    if detected:
-                        phone_detected = True
-                        max_conf = max(max_conf, conf)
-                        hand_rects.append((x1, y1, x2, y2))
-            except:
-                pass
+                for result in results:
+                    for box in result.boxes:
+                        cls = int(box.cls[0])
+                        conf = float(box.conf[0])
+                        
+                        # Class 67 is 'cell phone' in COCO dataset
+                        if cls == 67 and conf > 0.4: 
+                            phone_detected = True
+                            max_conf = max(max_conf, conf * 100)
+                            
+                            # Get bounding box coordinates
+                            x1, y1, x2, y2 = map(int, box.xyxy[0])
+                            hand_rects.append((x1, y1, x2, y2))
+                            
+            except Exception as e:
+                print(f"[ERROR] YOLO detection failed: {e}")
         
         return phone_detected, max_conf, hand_rects
 
