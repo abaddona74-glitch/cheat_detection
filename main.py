@@ -684,4 +684,26 @@ def main():
     cv2.destroyAllWindows()  # Barcha oynalarni yopish
 
 if __name__ == "__main__":
-    main()  # Dastur boshlanishi
+    import sys
+    import traceback
+    
+    # Windows konsolida UTF-8 muammolarini oldini olish
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+            sys.stderr.reconfigure(encoding='utf-8')
+        except:
+            pass
+
+    try:
+        main()  # Dastur boshlanishi
+    except Exception:
+        # Xatolikni faylga yozish (konsol muammosi bo'lsa)
+        with open("error_log.txt", "w", encoding="utf-8") as f:
+            traceback.print_exc(file=f)
+        
+        # Konsolga chiqarishga urinish
+        print("\n[CRITICAL ERROR] Dasturda xatolik yuz berdi!")
+        print("Xatolik tafsilotlari 'error_log.txt' fayliga yozildi.")
+        traceback.print_exc()
+        input("Chiqish uchun Enter bosing...")
