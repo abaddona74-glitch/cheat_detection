@@ -78,6 +78,12 @@ class FaceRecognitionSystem:
             import traceback
             traceback.print_exc()
             raise e
+
+    # Yuzlar ma'lumotlar bazasini yuklash
+    def load_face_database(self):
+        if os.path.exists(FACE_DB_FILE):  # Fayl mavjud bo'lsa
+            with open(FACE_DB_FILE, 'rb') as f:
+                data = pickle.load(f)  # Ma'lumotlarni fayldan yuklash
                 self.known_face_encodings = data['encodings']
                 self.known_face_names = data['names']
                 print(f"[INFO] {len(self.known_face_names)} ta yuz yuklandi")
