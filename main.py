@@ -411,6 +411,9 @@ def main():
                 if frame.shape[1] != self.width or frame.shape[0] != self.height:
                     frame = cv2.resize(frame, (self.width, self.height))
 
+                # Mirror effect (Ko'zgu effekti)
+                frame = cv2.flip(frame, 1)
+
                 with self.lock:
                     self.grabbed = grabbed
                     self.frame = frame

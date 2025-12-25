@@ -139,6 +139,8 @@ class Dashboard:
         # Auto-capture variables
         self.auto_capture_start_time = None
         self.countdown_active = False
+        self.capture_step = 0 # 0: Front, 1: Left, 2: Right
+        self.captured_images = 0
 
         # Video Loop for Preview
         def update_preview():
@@ -182,16 +184,69 @@ class Dashboard:
                         x_max = max([lm.x for lm in face_landmarks.landmark])
                         face_width = x_max - x_min
                         
-                        if face_width < 0.3:
-                            status_text = "Too far! Please come closer."
-                            status_color = "#FFAA00" # Orange
-                        elif face_width > 0.7:
-                            status_text = "Too close! Please move back."
-                            status_color = "#FFAA00" # Orange
-                        else:
-                            status_text = "Perfect distance. Hold still."
-                            status_color = "green"
-                            is_perfect = True
+                        # Calculate Yaw (Rotation)
+                        # 3D model points logic (simplified for dashboard)
+                        face_3d = []
+                        face_2d = []
+                        img_h, img_w, img_c = frame.shape
+                        
+                        # Key landmarks for pose
+                        key_points = [1, 33, 263, 61, 291, 199]
+                        for idx, lm in enumerate(face_landmarks.landmark):
+                            if idx in key_points:
+                                x, y = int(lm.x * img_w), int(lm.y * img_h)
+                                face_2d.append([x, y])
+                                face_3d.append([x, y, lm.z])
+                        
+                        face_2d = np.array(face_2d, dtype=np.float64)
+                        face_3d = np.array(face_3d, dtype=np.float64)
+
+                        focal_length = 1 * img_w
+                        cam_matrix = np.array([[focal_length, 0, img_h / 2],
+                                             [0, focal_length, img_w / 2],
+                                             [0, 0, 1]])
+                        dist_matrix = np.zeros((4, 1), dtype=np.float64)
+
+                        success, rot_vec, trans_vec = cv2.solvePnP(face_3d, face_2d, cam_matrix, dist_matrix)
+                        rmat, jac = cv2.Rodrigues(rot_vec)
+                        angles, mtxR, mtxQ, Qx, Qy, Qz = cv2.RQDecomp3x3(rmat)
+                        
+                        x_angle = angles[0] * 360
+                        y_angle = angles[1] * 360 # Yaw
+                        
+                        # Step logic
+                        if self.capture_step == 0: # Front
+                            if face_width < 0.3:
+                                status_text = "Too far! Come closer."
+                                status_color = "#FFAA00"
+                            elif face_width > 0.7:
+                                status_text = "Too close! Move back."
+                                status_color = "#FFAA00"
+                            elif abs(y_angle) > 10:
+                                status_text = "Look Straight Ahead"
+                                status_color = "#FFAA00"
+                            else:
+                                status_text = "Perfect! Hold still (Front)."
+                                status_color = "green"
+                                is_perfect = True
+                        elif self.capture_step == 1: # Left
+                            if y_angle < 15: # Mirror effect: Looking Left is positive Yaw? No, let's check.
+                                # Usually +Yaw is Right, -Yaw is Left. But with Mirror...
+                                # Let's just say "Turn Head Left" and check for significant angle
+                                status_text = "Turn Head LEFT ->"
+                                status_color = "#00AAFF"
+                            else:
+                                status_text = "Hold still (Left Side)."
+                                status_color = "green"
+                                is_perfect = True
+                        elif self.capture_step == 2: # Right
+                            if y_angle > -15:
+                                status_text = "Turn Head RIGHT <-"
+                                status_color = "#00AAFF"
+                            else:
+                                status_text = "Hold still (Right Side)."
+                                status_color = "green"
+                                is_perfect = True
 
                 # Auto-capture Logic
                 name = name_entry.get().strip()
@@ -206,26 +261,38 @@ class Dashboard:
                     if countdown > 0:
                         # Draw countdown
                         cv2.putText(frame, str(countdown), (220, 180), cv2.FONT_HERSHEY_SIMPLEX, 4, (0, 255, 0), 5)
-                        status_text = f"Capturing in {countdown}..."
+                        # status_text = f"Capturing in {countdown}..." # Keep the instruction text
                     else:
                         # Capture!
                         self.countdown_active = False
                         self.auto_capture_start_time = None
-                        # Use the original frame from stream for better quality, but we need to ensure it's fresh
-                        # For simplicity, we use the current processed frame or fetch a new one
-                        # Let's fetch a fresh one to avoid drawing overlays on the saved face
+                        
                         fresh_frame, _ = self.video_stream.read()
                         if fresh_frame is not None:
+                             # Mirror the fresh frame too if needed, but video_stream already does it?
+                             # Yes, video_stream.read() returns mirrored frame now.
+                             
                              success, message = self.face_system.add_face(fresh_frame, name)
                              if success:
-                                 messagebox.showinfo("Success", f"Face registered for {name}!")
-                                 reg_window.destroy()
-                                 return
+                                 self.capture_step += 1
+                                 self.captured_images += 1
+                                 
+                                 if self.capture_step > 2:
+                                     messagebox.showinfo("Success", f"Face registered successfully! (3 angles)")
+                                     reg_window.destroy()
+                                     return
+                                 else:
+                                     # Flash effect or sound could go here
+                                     pass
                              else:
                                  messagebox.showerror("Error", message)
+                                 self.countdown_active = False # Reset
                 else:
                     self.countdown_active = False
                     self.auto_capture_start_time = None
+
+                # Progress Indicator
+                cv2.putText(frame, f"Step: {self.capture_step + 1}/3", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
                 # Update status label
                 status_label.config(text=status_text, foreground=status_color)
