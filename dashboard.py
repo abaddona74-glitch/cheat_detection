@@ -34,8 +34,11 @@ class Dashboard:
         self.btn_register = ttk.Button(btn_frame, text="Register New Face", command=self.open_register_window)
         self.btn_register.pack(fill="x", pady=5)
 
-        self.btn_database = ttk.Button(btn_frame, text="View Database", command=self.open_database_window)
+        self.btn_database = ttk.Button(btn_frame, text="View Faces", command=self.open_database_window)
         self.btn_database.pack(fill="x", pady=5)
+
+        self.btn_violations = ttk.Button(btn_frame, text="View Violations", command=self.open_violations_window)
+        self.btn_violations.pack(fill="x", pady=5)
 
         self.btn_start = ttk.Button(btn_frame, text="START DETECTION", command=self.start_detection)
         self.btn_start.pack(fill="x", pady=20)
@@ -90,6 +93,42 @@ class Dashboard:
         
         ttk.Button(btn_frame, text="Delete Selected", command=delete_face).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="Close", command=db_window.destroy).pack(side="left", padx=5)
+
+    def open_violations_window(self):
+        v_window = tk.Toplevel(self.root)
+        v_window.title("Violations Database")
+        v_window.geometry("600x400")
+        
+        # Treeview for table
+        columns = ("name", "phone", "backward", "blocked")
+        tree = ttk.Treeview(v_window, columns=columns, show="headings")
+        
+        tree.heading("name", text="Name")
+        tree.heading("phone", text="Phone Detections")
+        tree.heading("backward", text="Looking Backward")
+        tree.heading("blocked", text="Is Blocked?")
+        
+        tree.column("name", width=150)
+        tree.column("phone", width=100)
+        tree.column("backward", width=120)
+        tree.column("blocked", width=80)
+        
+        tree.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(v_window, orient="vertical", command=tree.yview)
+        scrollbar.place(relx=1.0, rely=0.0, relheight=1.0, anchor="ne")
+        tree.configure(yscrollcommand=scrollbar.set)
+        
+        # Populate data
+        for name, data in self.face_system.violations.items():
+            phone_count = data.get("phone", 0)
+            backward_count = data.get("backward_look", 0)
+            is_blocked = "YES" if name in self.face_system.blocked_users else "NO"
+            
+            tree.insert("", "end", values=(name, phone_count, backward_count, is_blocked))
+            
+        ttk.Button(v_window, text="Close", command=v_window.destroy).pack(pady=10)
 
     def open_register_window(self):
         reg_window = tk.Toplevel(self.root)

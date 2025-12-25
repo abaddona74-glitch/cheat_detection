@@ -42,6 +42,11 @@ class FaceRecognitionSystem:
             
             print("[DEBUG] Loading violations database...", flush=True)
             self.load_violations_database()
+            
+            # Yuz holati kuzatuvi (State Machine)
+            # Format: {name: {'state': 'NORMAL', 'start_time': 0}}
+            # States: NORMAL, WARNING, VIOLATED
+            self.face_states = {}
 
             # FaceMesh modelini yaratish
             print("[DEBUG] Loading FaceMesh model...", flush=True)
@@ -150,6 +155,43 @@ class FaceRecognitionSystem:
                 'violations': self.violations,
                 'blocked_users': self.blocked_users
             }, f)
+
+    def process_gaze_state(self, name, is_looking_backward):
+        if name == "Unknown": return False
+        
+        current_time = time()
+        if name not in self.face_states:
+            self.face_states[name] = {'state': 'NORMAL', 'start_time': 0}
+            
+        state_info = self.face_states[name]
+        state = state_info['state']
+        
+        violation_confirmed = False
+        
+        if is_looking_backward:
+            if state == 'NORMAL':
+                # Endi qarashni boshladi
+                self.face_states[name]['state'] = 'WARNING'
+                self.face_states[name]['start_time'] = current_time
+            elif state == 'WARNING':
+                # Qarab turibdi
+                elapsed = current_time - state_info['start_time']
+                if elapsed >= 5.0: # 5 sekund qarab tursa
+                    violation_confirmed = True
+                    self.face_states[name]['state'] = 'VIOLATED' # Violation yozildi, endi kutamiz
+        else:
+            # Normal holatga qaytdi
+            if state == 'WARNING':
+                # Qarab turib qaytdi (Glance) - bu ham violation
+                violation_confirmed = True
+                self.face_states[name]['state'] = 'NORMAL'
+            elif state == 'VIOLATED':
+                # Uzoq qarab turib qaytdi
+                self.face_states[name]['state'] = 'NORMAL'
+            else:
+                self.face_states[name]['state'] = 'NORMAL'
+                
+        return violation_confirmed
 
     # Qoidabuzarliklarni qayd qilish
     def record_violation(self, name, violation_type):
@@ -333,11 +375,12 @@ class FaceRecognitionSystem:
                     "right_eye_points": [get_pt(i) for i in right_eye_indices]
                 }
                 
-                return abs(yaw) > 50, image_points, eye_data, results.multi_face_landmarks[0]  # Agar orqaga qarayotgan bo'lsa
+                pose_data = (rotation_vec, translation_vec)
+                return abs(yaw) > 50, image_points, eye_data, results.multi_face_landmarks[0], pose_data
         except Exception as e:
             print(f"[ERROR] Bosh pozitsiyasini aniqlashda xatolik: {str(e)}")  # Xatolikni chiqarish
-            return False, None, None, None
-        return False, None, None, None
+            return False, None, None, None, None
+        return False, None, None, None, None
 
 import threading
 import time as time_module # time modulini qayta nomlaymiz, chunki pastda time() funksiyasi bor
@@ -584,6 +627,7 @@ def main():
                     all_landmarks = []
                     all_eye_data = []
                     all_mesh_landmarks = []
+                    all_pose_data = []
                     
                     for face_location in face_locations:
                         # 3. Yuzni tanish (Asl kadrda, lekin aniqlangan joylarda)
@@ -591,17 +635,20 @@ def main():
                         face_names.append(name)
                         
                         # 4. Bosh holatini aniqlash
-                        is_looking_backward, landmarks, eye_data, mesh_landmarks = face_system.detect_backward_looking(frame_to_process, face_location)
+                        is_looking_backward, landmarks, eye_data, mesh_landmarks, pose_data = face_system.detect_backward_looking(frame_to_process, face_location)
                         backward_looking_status.append(is_looking_backward)
                         all_landmarks.append(landmarks)
                         all_eye_data.append(eye_data)
                         all_mesh_landmarks.append(mesh_landmarks)
+                        all_pose_data.append(pose_data)
                         
                         # Qoidabuzarliklarni yozish
                         if phone_detected:
                             face_system.log_cheat(name, "Phone detected")
                             face_system.record_violation(name, "phone")
-                        elif is_looking_backward:
+                        
+                        # Gaze violation logic with state machine
+                        if face_system.process_gaze_state(name, is_looking_backward):
                             face_system.log_cheat(name, "Looking backward")
                             face_system.record_violation(name, "backward_look")
 
@@ -616,6 +663,7 @@ def main():
                             "landmarks": all_landmarks,
                             "eye_data": all_eye_data,
                             "face_mesh_landmarks": all_mesh_landmarks,
+                            "head_pose_data": all_pose_data,
                             "pose_landmarks": pose_landmarks,
                             "hand_landmarks": hand_landmarks_list,
                             "hand_rects": hand_rects
@@ -712,6 +760,7 @@ def main():
         landmarks_list = current_results.get("landmarks", [])
         eye_data_list = current_results.get("eye_data", [])
         mesh_landmarks_list = current_results.get("face_mesh_landmarks", [])
+        head_pose_data_list = current_results.get("head_pose_data", [])
         pose_landmarks = current_results.get("pose_landmarks", None)
         hand_landmarks_list = current_results.get("hand_landmarks", [])
         hand_rects = current_results.get("hand_rects", [])
@@ -737,6 +786,16 @@ def main():
         for (hx1, hy1, hx2, hy2) in hand_rects:
             cv2.rectangle(frame, (hx1, hy1), (hx2, hy2), (0, 0, 255), 3)
             cv2.putText(frame, "PHONE DETECTED", (hx1, hy1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            
+            # Draw grid (setka) on phone
+            step = 20
+            for x in range(hx1, hx2, step):
+                cv2.line(frame, (x, hy1), (x, hy2), (0, 0, 255), 1)
+            for y in range(hy1, hy2, step):
+                cv2.line(frame, (hx1, y), (hx2, y), (0, 0, 255), 1)
+            # Diagonal lines for mesh effect
+            cv2.line(frame, (hx1, hy1), (hx2, hy2), (0, 0, 255), 1)
+            cv2.line(frame, (hx2, hy1), (hx1, hy2), (0, 0, 255), 1)
 
         # Ro'yxatlar uzunligi mos kelishini ta'minlash
         if len(landmarks_list) != len(face_locations):
@@ -745,8 +804,10 @@ def main():
              eye_data_list = [None] * len(face_locations)
         if len(mesh_landmarks_list) != len(face_locations):
              mesh_landmarks_list = [None] * len(face_locations)
+        if len(head_pose_data_list) != len(face_locations):
+             head_pose_data_list = [None] * len(face_locations)
 
-        for (top, right, bottom, left), name, is_looking_backward, landmarks, eye_info, mesh_landmarks in zip(face_locations, face_names, backward_looking_status, landmarks_list, eye_data_list, mesh_landmarks_list):
+        for (top, right, bottom, left), name, is_looking_backward, landmarks, eye_info, mesh_landmarks, pose_data in zip(face_locations, face_names, backward_looking_status, landmarks_list, eye_data_list, mesh_landmarks_list, head_pose_data_list):
             
             # Foydalanuvchi bloklangan yoki yo'qligini tekshirish
             is_blocked = face_system.is_blocked(name)
@@ -802,6 +863,30 @@ def main():
                     # Ko'z qorachig'ini chizish (Qizil rangda)
                     cv2.circle(frame, eye_info["left_iris"], 2, (0, 0, 255), -1)
                     cv2.circle(frame, eye_info["right_iris"], 2, (0, 0, 255), -1)
+
+                # Gaze Direction Visualization (Axis)
+                if pose_data is not None:
+                    try:
+                        rvec, tvec = pose_data
+                        # Axis length
+                        axis_len = 100
+                        axis_pts = np.float32([[0,0,0], [0,0,axis_len], [0,axis_len,0], [axis_len,0,0]]).reshape(-1,3)
+                        
+                        # Camera matrix (must match what was used in solvePnP)
+                        h, w, _ = frame.shape
+                        focal_length = 1 * w
+                        cam_matrix = np.array([[focal_length, 0, h / 2], [0, focal_length, w / 2], [0, 0, 1]])
+                        dist_matrix = np.zeros((4, 1), dtype=np.float64)
+                        
+                        imgpts, _ = cv2.projectPoints(axis_pts, rvec, tvec, cam_matrix, dist_matrix)
+                        nose_pt = tuple(imgpts[0].ravel().astype(int))
+                        
+                        # Draw axes: Z=Blue (Forward), Y=Green (Down), X=Red (Right)
+                        cv2.line(frame, nose_pt, tuple(imgpts[1].ravel().astype(int)), (255,0,0), 3) # Z - Blue
+                        cv2.line(frame, nose_pt, tuple(imgpts[2].ravel().astype(int)), (0,255,0), 2) # Y - Green
+                        cv2.line(frame, nose_pt, tuple(imgpts[3].ravel().astype(int)), (0,0,255), 2) # X - Red
+                    except Exception as e:
+                        pass
 
             label = f"Name: {name}"
             if is_blocked:
