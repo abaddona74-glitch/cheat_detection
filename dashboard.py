@@ -3,6 +3,8 @@ from tkinter import ttk, messagebox
 import cv2
 from PIL import Image, ImageTk
 import threading
+import mediapipe as mp
+import numpy as np
 
 class Dashboard:
     def __init__(self, root, face_system, video_stream):
@@ -103,6 +105,11 @@ class Dashboard:
 
         ttk.Button(reg_window, text="Capture & Save", command=capture_face).pack(pady=10)
 
+        # Drawing utils for Face Mesh
+        mp_drawing = mp.solutions.drawing_utils
+        mp_drawing_styles = mp.solutions.drawing_styles
+        mp_face_mesh = mp.solutions.face_mesh
+
         # Video Loop for Preview
         def update_preview():
             if not reg_window.winfo_exists():
@@ -112,7 +119,52 @@ class Dashboard:
             if frame is not None:
                 # Resize for UI
                 frame = cv2.resize(frame, (500, 375))
-                # Convert to RGB
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                
+                # Face Mesh Processing
+                results = self.face_system.face_mesh.process(rgb_frame)
+                
+                status_text = "No face detected"
+                status_color = "red"
+                
+                if results.multi_face_landmarks:
+                    for face_landmarks in results.multi_face_landmarks:
+                        # Draw the mesh (tesselation) - "Cells"
+                        mp_drawing.draw_landmarks(
+                            image=frame,
+                            landmark_list=face_landmarks,
+                            connections=mp_face_mesh.FACEMESH_TESSELATION,
+                            landmark_drawing_spec=None,
+                            connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_tesselation_style())
+                        
+                        # Draw contours (eyes, lips, face oval)
+                        mp_drawing.draw_landmarks(
+                            image=frame,
+                            landmark_list=face_landmarks,
+                            connections=mp_face_mesh.FACEMESH_CONTOURS,
+                            landmark_drawing_spec=None,
+                            connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style())
+
+                        # Calculate face size for distance guidance
+                        h, w, _ = frame.shape
+                        x_min = min([lm.x for lm in face_landmarks.landmark])
+                        x_max = max([lm.x for lm in face_landmarks.landmark])
+                        face_width = x_max - x_min
+                        
+                        if face_width < 0.3:
+                            status_text = "Too far! Please come closer."
+                            status_color = "#FFAA00" # Orange
+                        elif face_width > 0.7:
+                            status_text = "Too close! Please move back."
+                            status_color = "#FFAA00" # Orange
+                        else:
+                            status_text = "Perfect distance. Hold still."
+                            status_color = "green"
+
+                # Update status label
+                status_label.config(text=status_text, foreground=status_color)
+
+                # Convert to RGB for Tkinter
                 cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(cv2image)
                 imgtk = ImageTk.PhotoImage(image=img)
