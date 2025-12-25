@@ -171,10 +171,12 @@ class Dashboard:
                             connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_tesselation_style())
                         
                         # Draw contours (eyes, lips, face oval)
+                        # Yondan qaraganda "Face Oval" chizig'i noto'g'ri ko'rinishi mumkin, shuning uchun uni o'chirib turamiz
+                        # Faqat ko'z va lablarni chizamiz
                         mp_drawing.draw_landmarks(
                             image=frame,
                             landmark_list=face_landmarks,
-                            connections=mp_face_mesh.FACEMESH_CONTOURS,
+                            connections=mp_face_mesh.FACEMESH_IRISES, # Faqat ko'zlar
                             landmark_drawing_spec=None,
                             connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style())
 

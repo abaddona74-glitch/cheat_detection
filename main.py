@@ -65,6 +65,17 @@ class FaceRecognitionSystem:
                 min_tracking_confidence=0.5
             )
 
+            # Hands (Qo'l) modelini yaratish
+            print("[DEBUG] Loading Hands model...", flush=True)
+            self.mp_hands = mp.solutions.hands
+            self.hands = self.mp_hands.Hands(
+                static_image_mode=False,
+                max_num_hands=2,
+                model_complexity=1,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
+
             # 3D bosh pozitsiyasini aniqlash uchun model nuqtalari
             self.model_points = np.array([
                 (0.0, 0.0, 0.0),
@@ -221,40 +232,23 @@ class FaceRecognitionSystem:
         except:
             return False, 0.0
 
-    def check_hands_for_phone(self, frame, pose_landmarks):
+    def check_hands_for_phone(self, frame, hand_landmarks_list):
         h, w, _ = frame.shape
         phone_detected = False
         max_conf = 0.0
         hand_rects = []
 
-        # Chap va O'ng qo'l bilaklari (Wrist)
-        # 15: Left Wrist, 16: Right Wrist
-        # 17: Left Pinky, 19: Left Index
-        # 18: Right Pinky, 20: Right Index
-        
-        hands = [
-            {"wrist": 15, "index": 19, "pinky": 17, "label": "Left"},
-            {"wrist": 16, "index": 20, "pinky": 18, "label": "Right"}
-        ]
-
-        for hand in hands:
+        for hand_landmarks in hand_landmarks_list:
             try:
-                wrist = pose_landmarks.landmark[hand["wrist"]]
-                index = pose_landmarks.landmark[hand["index"]]
-                pinky = pose_landmarks.landmark[hand["pinky"]]
-                
-                # Agar qo'l ko'rinmasa o'tkazib yuboramiz
-                if wrist.visibility < 0.5: continue
-
                 # Qo'l atrofini hisoblash
-                x_coords = [wrist.x, index.x, pinky.x]
-                y_coords = [wrist.y, index.y, pinky.y]
+                x_coords = [lm.x for lm in hand_landmarks.landmark]
+                y_coords = [lm.y for lm in hand_landmarks.landmark]
                 
                 min_x, max_x = min(x_coords), max(x_coords)
                 min_y, max_y = min(y_coords), max(y_coords)
                 
                 # Kengroq qamrab olish (margin)
-                margin = 0.15 # 15% margin
+                margin = 0.1 # 10% margin
                 min_x = max(0, min_x - margin)
                 max_x = min(1, max_x + margin)
                 min_y = max(0, min_y - margin)
@@ -555,6 +549,7 @@ def main():
             "eye_data": [],
             "face_mesh_landmarks": [], # To'liq mesh uchun
             "pose_landmarks": None, # Tana uchun
+            "hand_landmarks": [], # Qo'llar uchun
             "hand_rects": [] # Telefon aniqlangan qo'l sohalari
         },
         "running": True,
@@ -604,14 +599,21 @@ def main():
                     # 2. Pose (Tana) aniqlash
                     pose_results = face_system.pose.process(rgb_small_frame) # Kichik kadrda tezroq
                     pose_landmarks = None
-                    hand_rects = []
-                    
                     if pose_results.pose_landmarks:
                         pose_landmarks = pose_results.pose_landmarks
-                        # Telefonni qo'llarda qidirish (Asl kadrda)
-                        # Pose koordinatalarini asl o'lchamga o'tkazish kerak emas, chunki mediapipe 0-1 oraliqda qaytaradi
-                        # Lekin biz crop qilish uchun asl kadrni ishlatamiz
-                        phone_detected, phone_confidence, hand_rects = face_system.check_hands_for_phone(frame_to_process, pose_landmarks)
+
+                    # 3. Hands (Qo'l) aniqlash
+                    # Qo'llarni aniqlash uchun asl kadrni ishlatamiz (aniqlik uchun)
+                    # Lekin tezlik uchun kichik kadrni ishlatish ham mumkin. Keling, kichik kadrni sinab ko'ramiz.
+                    hands_results = face_system.hands.process(rgb_small_frame)
+                    hand_landmarks_list = []
+                    hand_rects = []
+                    
+                    if hands_results.multi_hand_landmarks:
+                        hand_landmarks_list = hands_results.multi_hand_landmarks
+                        # Telefonni qo'llarda qidirish (Asl kadrda crop qilish uchun)
+                        # Lekin landmarks kichik kadrda, shuning uchun ularni asl kadrga o'tkazish shart emas (chunki ular 0-1 oraliqda)
+                        phone_detected, phone_confidence, hand_rects = face_system.check_hands_for_phone(frame_to_process, hand_landmarks_list)
                     
                     # Agar qo'llarda topilmasa, butun kadrni tekshirib ko'ramiz (Fallback)
                     if not phone_detected:
@@ -655,6 +657,7 @@ def main():
                             "eye_data": all_eye_data,
                             "face_mesh_landmarks": all_mesh_landmarks,
                             "pose_landmarks": pose_landmarks,
+                            "hand_landmarks": hand_landmarks_list,
                             "hand_rects": hand_rects
                         }
                         shared_data["processing_time"] = time() - start_proc
@@ -750,6 +753,7 @@ def main():
         eye_data_list = current_results.get("eye_data", [])
         mesh_landmarks_list = current_results.get("face_mesh_landmarks", [])
         pose_landmarks = current_results.get("pose_landmarks", None)
+        hand_landmarks_list = current_results.get("hand_landmarks", [])
         hand_rects = current_results.get("hand_rects", [])
 
         # Tana (Pose) chizish
@@ -759,6 +763,15 @@ def main():
                 pose_landmarks,
                 mp.solutions.pose.POSE_CONNECTIONS,
                 landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
+
+        # Qo'llar (Hands) chizish
+        for hand_landmarks in hand_landmarks_list:
+            mp_drawing.draw_landmarks(
+                frame,
+                hand_landmarks,
+                mp.solutions.hands.HAND_CONNECTIONS,
+                landmark_drawing_spec=mp_drawing_styles.get_default_hand_landmarks_style(),
+                connection_drawing_spec=mp_drawing_styles.get_default_hand_connections_style())
 
         # Telefon aniqlangan qo'l sohalarini chizish
         for (hx1, hy1, hx2, hy2) in hand_rects:
