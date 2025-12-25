@@ -793,20 +793,29 @@ def main():
 
         # Tana (Pose) chizish
         if pose_landmarks:
+            # Custom style for pose to match face mesh (Light Blue/Yellowish)
+            pose_landmark_spec = mp_drawing.DrawingSpec(color=(250, 239, 154), thickness=2, circle_radius=2)
+            pose_connection_spec = mp_drawing.DrawingSpec(color=(255, 222, 156), thickness=2, circle_radius=2)
+            
             mp_drawing.draw_landmarks(
                 frame,
                 pose_landmarks,
                 mp.solutions.pose.POSE_CONNECTIONS,
-                landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
+                landmark_drawing_spec=pose_landmark_spec,
+                connection_drawing_spec=pose_connection_spec)
 
         # Qo'llar (Hands) chizish
         for hand_landmarks in hand_landmarks_list:
+            # Custom style for hands to match face mesh
+            hand_landmark_spec = mp_drawing.DrawingSpec(color=(250, 239, 154), thickness=2, circle_radius=2)
+            hand_connection_spec = mp_drawing.DrawingSpec(color=(255, 222, 156), thickness=2, circle_radius=2)
+            
             mp_drawing.draw_landmarks(
                 frame,
                 hand_landmarks,
                 mp.solutions.hands.HAND_CONNECTIONS,
-                landmark_drawing_spec=mp_drawing_styles.get_default_hand_landmarks_style(),
-                connection_drawing_spec=mp_drawing_styles.get_default_hand_connections_style())
+                landmark_drawing_spec=hand_landmark_spec,
+                connection_drawing_spec=hand_connection_spec)
 
         # Telefon aniqlangan qo'l sohalarini chizish
         for (hx1, hy1, hx2, hy2) in hand_rects:
@@ -887,17 +896,14 @@ def main():
                         connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style())
 
                 if landmarks is not None:
-                    for point in landmarks:
-                        cv2.circle(frame, (int(point[0]), int(point[1])), 3, (0, 255, 255), -1)
+                    # Bu qismni olib tashlaymiz, chunki to'liq mesh (yuqorida) yetarli
+                    # Va bu eski sariq/ko'k nuqtalarni chizayotgan edi
+                    pass
+                    
                     # Nuqtalarni tutashtiruvchi chiziqlar (vizualizatsiya uchun)
                     # Burun uchi
-                    nose = (int(landmarks[0][0]), int(landmarks[0][1]))
-                    # Ko'zlar
-                    left_eye = (int(landmarks[2][0]), int(landmarks[2][1]))
-                    right_eye = (int(landmarks[3][0]), int(landmarks[3][1]))
-                    
-                    cv2.line(frame, nose, left_eye, (255, 0, 0), 1)
-                    cv2.line(frame, nose, right_eye, (255, 0, 0), 1)
+                    # nose = (int(landmarks[0][0]), int(landmarks[0][1]))
+                    # ... (eski kod)
                 
                 # Ko'z chizish (eye_info) olib tashlandi
 
