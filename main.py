@@ -74,9 +74,23 @@ class FaceRecognitionSystem:
             )
             print("[DEBUG] System initialized successfully.", flush=True)
         except Exception as e:
-            print(f"[ERROR] Init failed: {e}", flush=True)
-            import traceback
-            traceback.print_exc()
+            # Xatolikni faylga yozish
+            try:
+                with open("error_log.txt", "w", encoding="utf-8") as f:
+                    import traceback
+                    traceback.print_exc(file=f)
+            except:
+                pass # Faylga yozishda xatolik bo'lsa, indamaymiz
+
+            # Konsolga chiqarishga urinish (agar iloji bo'lsa)
+            try:
+                print(f"[ERROR] Init failed: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+            except:
+                pass # Konsol ishlamasa, indamaymiz
+            
+            # Dasturni to'xtatish
             raise e
 
     # Yuzlar ma'lumotlar bazasini yuklash
