@@ -3,6 +3,6 @@ numpy
 tensorflow
 face_recognition
 pickle-mixin
-mediapipe
+mediapipe==0.10.21
 pandas
 pandasgui
