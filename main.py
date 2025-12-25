@@ -28,50 +28,56 @@ FACE_LANDMARKS = {
 # Yuz tanib olish tizimi sinfi
 class FaceRecognitionSystem:
     def __init__(self):
-        print("[INFO] Tizim ishga tushmoqda...")  # Tizim ishga tushayotganini bildirish
-        self.known_face_encodings = []  # Yuzlarning kodlari
-        self.known_face_names = []  # Yuzlar bilan bog'liq nomlar
-        
-        print("[DEBUG] Yuzlar bazasi yuklanmoqda...")
-        self.load_face_database()  # Ma'lumotlar bazasini yuklash
-        
-        # Qoidabuzarliklar va bloklanganlar bazasini yaratish
-        self.violations = {}  # Qoidabuzarliklar soni
-        self.blocked_users = []  # Bloklangan foydalanuvchilar ro'yxati
-        
-        print("[DEBUG] Qoidabuzarliklar bazasi yuklanmoqda...")
-        self.load_violations_database()  # Qoidabuzarliklar ma'lumotlar bazasini yuklash
+        try:
+            print("[INFO] System starting...", flush=True)
+            self.known_face_encodings = []
+            self.known_face_names = []
+            
+            print("[DEBUG] Loading face database...", flush=True)
+            self.load_face_database()
+            
+            # Qoidabuzarliklar va bloklanganlar bazasini yaratish
+            self.violations = {}
+            self.blocked_users = []
+            
+            print("[DEBUG] Loading violations database...", flush=True)
+            self.load_violations_database()
 
-        # FaceMesh modelini yaratish
-        print("[DEBUG] FaceMesh modeli yuklanmoqda...")
-        self.mp_face_mesh = mp.solutions.face_mesh
-        self.face_mesh = self.mp_face_mesh.FaceMesh(
-            static_image_mode=False,
-            max_num_faces=1,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        )
+            # FaceMesh modelini yaratish
+            print("[DEBUG] Loading FaceMesh model...", flush=True)
+            self.mp_face_mesh = mp.solutions.face_mesh
+            self.face_mesh = self.mp_face_mesh.FaceMesh(
+                static_image_mode=False,
+                max_num_faces=1,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
 
-        # 3D bosh pozitsiyasini aniqlash uchun model nuqtalari
-        self.model_points = np.array([  # Model points for 3D head pose estimation
-            (0.0, 0.0, 0.0),
-            (0.0, -63.6, -12.5),
-            (-43.3, 32.7, -26.0),
-            (43.3, 32.7, -26.0),
-            (-28.9, -28.9, -24.1),
-            (28.9, -28.9, -24.1)
-        ], dtype=np.float32)
+            # 3D bosh pozitsiyasini aniqlash uchun model nuqtalari
+            self.model_points = np.array([
+                (0.0, 0.0, 0.0),
+                (0.0, -63.6, -12.5),
+                (-43.3, 32.7, -26.0),
+                (43.3, 32.7, -26.0),
+                (-28.9, -28.9, -24.1),
+                (28.9, -28.9, -24.1)
+            ], dtype=np.float32)
 
-        # Telefonni aniqlash uchun mobil model (MobileNetV2)
-        print("[DEBUG] MobileNetV2 modeli yuklanmoqda (TensorFlow)...")
-        self.phone_model = tf.keras.applications.MobileNetV2(
-            input_shape=(224, 224, 3),
-            alpha=1.0,
-            include_top=True,
-            weights='imagenet',
-            pooling='avg'
-        )
-        print("[DEBUG] Tizim to'liq ishga tushdi.")
+            # Telefonni aniqlash uchun mobil model (MobileNetV2)
+            print("[DEBUG] Loading MobileNetV2 model...", flush=True)
+            self.phone_model = tf.keras.applications.MobileNetV2(
+                input_shape=(224, 224, 3),
+                alpha=1.0,
+                include_top=True,
+                weights='imagenet',
+                pooling='avg'
+            )
+            print("[DEBUG] System initialized successfully.", flush=True)
+        except Exception as e:
+            print(f"[ERROR] Init failed: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            raise e
                 self.known_face_encodings = data['encodings']
                 self.known_face_names = data['names']
                 print(f"[INFO] {len(self.known_face_names)} ta yuz yuklandi")
