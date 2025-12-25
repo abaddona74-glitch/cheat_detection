@@ -31,14 +31,19 @@ class FaceRecognitionSystem:
         print("[INFO] Tizim ishga tushmoqda...")  # Tizim ishga tushayotganini bildirish
         self.known_face_encodings = []  # Yuzlarning kodlari
         self.known_face_names = []  # Yuzlar bilan bog'liq nomlar
+        
+        print("[DEBUG] Yuzlar bazasi yuklanmoqda...")
         self.load_face_database()  # Ma'lumotlar bazasini yuklash
         
         # Qoidabuzarliklar va bloklanganlar bazasini yaratish
         self.violations = {}  # Qoidabuzarliklar soni
         self.blocked_users = []  # Bloklangan foydalanuvchilar ro'yxati
+        
+        print("[DEBUG] Qoidabuzarliklar bazasi yuklanmoqda...")
         self.load_violations_database()  # Qoidabuzarliklar ma'lumotlar bazasini yuklash
 
         # FaceMesh modelini yaratish
+        print("[DEBUG] FaceMesh modeli yuklanmoqda...")
         self.mp_face_mesh = mp.solutions.face_mesh
         self.face_mesh = self.mp_face_mesh.FaceMesh(
             static_image_mode=False,
@@ -58,6 +63,7 @@ class FaceRecognitionSystem:
         ], dtype=np.float32)
 
         # Telefonni aniqlash uchun mobil model (MobileNetV2)
+        print("[DEBUG] MobileNetV2 modeli yuklanmoqda (TensorFlow)...")
         self.phone_model = tf.keras.applications.MobileNetV2(
             input_shape=(224, 224, 3),
             alpha=1.0,
@@ -65,12 +71,7 @@ class FaceRecognitionSystem:
             weights='imagenet',
             pooling='avg'
         )
-
-    # Yuzlar ma'lumotlar bazasini yuklash
-    def load_face_database(self):
-        if os.path.exists(FACE_DB_FILE):  # Fayl mavjud bo'lsa
-            with open(FACE_DB_FILE, 'rb') as f:
-                data = pickle.load(f)  # Ma'lumotlarni fayldan yuklash
+        print("[DEBUG] Tizim to'liq ishga tushdi.")
                 self.known_face_encodings = data['encodings']
                 self.known_face_names = data['names']
                 print(f"[INFO] {len(self.known_face_names)} ta yuz yuklandi")
@@ -697,7 +698,7 @@ if __name__ == "__main__":
 
     try:
         main()  # Dastur boshlanishi
-    except Exception:
+    except BaseException:
         # Xatolikni faylga yozish (konsol muammosi bo'lsa)
         with open("error_log.txt", "w", encoding="utf-8") as f:
             traceback.print_exc(file=f)
@@ -705,5 +706,8 @@ if __name__ == "__main__":
         # Konsolga chiqarishga urinish
         print("\n[CRITICAL ERROR] Dasturda xatolik yuz berdi!")
         print("Xatolik tafsilotlari 'error_log.txt' fayliga yozildi.")
-        traceback.print_exc()
+        try:
+            traceback.print_exc()
+        except:
+            print("Konsolga xatolikni chiqarib bo'lmadi.")
         input("Chiqish uchun Enter bosing...")
