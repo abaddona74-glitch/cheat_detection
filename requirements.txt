@@ -1,0 +1,8 @@
+opencv-python
+numpy
+tensorflow
+face_recognition
+pickle-mixin
+mediapipe
+pandas
+pandasgui
