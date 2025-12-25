@@ -207,10 +207,10 @@ class FaceRecognitionSystem:
         cv2.imwrite(filename, frame)
         print(f"[INFO] Cheat image saved: {filename}")
 
-    def check_hands_for_phone(self, frame, hand_landmarks_list):
+    def detect_phone(self, frame):
         phone_detected = False
         max_conf = 0.0
-        hand_rects = [] # Will contain phone bounding boxes
+        phone_rects = [] # Will contain phone bounding boxes
 
         if self.phone_model:
             try:
@@ -229,12 +229,12 @@ class FaceRecognitionSystem:
                             
                             # Get bounding box coordinates
                             x1, y1, x2, y2 = map(int, box.xyxy[0])
-                            hand_rects.append((x1, y1, x2, y2))
+                            phone_rects.append((x1, y1, x2, y2))
                             
             except Exception as e:
                 print(f"[ERROR] YOLO detection failed: {e}")
         
-        return phone_detected, max_conf, hand_rects
+        return phone_detected, max_conf, phone_rects
 
     # Yuzni qo'shish
     def add_face(self, frame, name):
@@ -572,17 +572,12 @@ def main():
                     # Lekin tezlik uchun kichik kadrni ishlatish ham mumkin. Keling, kichik kadrni sinab ko'ramiz.
                     hands_results = face_system.hands.process(rgb_small_frame)
                     hand_landmarks_list = []
-                    hand_rects = []
                     
                     if hands_results.multi_hand_landmarks:
                         hand_landmarks_list = hands_results.multi_hand_landmarks
-                        # Telefonni qo'llarda qidirish (Asl kadrda crop qilish uchun)
-                        # Lekin landmarks kichik kadrda, shuning uchun ularni asl kadrga o'tkazish shart emas (chunki ular 0-1 oraliqda)
-                        phone_detected, phone_confidence, hand_rects = face_system.check_hands_for_phone(frame_to_process, hand_landmarks_list)
                     
-                    # Agar qo'llarda topilmasa, butun kadrni tekshirib ko'ramiz (Fallback)
-                    if not phone_detected:
-                        phone_detected, phone_confidence = face_system.detect_phone(frame_to_process)
+                    # Telefonni aniqlash (YOLOv8) - Butun kadr bo'ylab
+                    phone_detected, phone_confidence, hand_rects = face_system.detect_phone(frame_to_process)
 
                     face_names = []
                     backward_looking_status = []
