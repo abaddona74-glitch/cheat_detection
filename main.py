@@ -866,11 +866,14 @@ def main():
             if debug_mode:
                 # To'liq meshni chizish
                 if mesh_landmarks is not None:
+                    # Custom style for landmarks (dots) to make it look dense
+                    landmark_spec = mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=1, circle_radius=1)
+                    
                     mp_drawing.draw_landmarks(
                         image=frame,
                         landmark_list=mesh_landmarks,
                         connections=mp_face_mesh.FACEMESH_TESSELATION,
-                        landmark_drawing_spec=None,
+                        landmark_drawing_spec=landmark_spec,
                         connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_tesselation_style())
                     
                     mp_drawing.draw_landmarks(
