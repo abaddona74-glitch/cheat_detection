@@ -49,6 +49,7 @@ class FaceRecognitionSystem:
             self.face_mesh = self.mp_face_mesh.FaceMesh(
                 static_image_mode=False,
                 max_num_faces=1,
+                refine_landmarks=True, # Ko'z qorachig'ini aniqlash uchun
                 min_detection_confidence=0.5,
                 min_tracking_confidence=0.5
             )
@@ -281,11 +282,29 @@ class FaceRecognitionSystem:
             if success:
                 rotation_mat, _ = cv2.Rodrigues(rotation_vec)  # Boshni aylantirish
                 yaw = np.arctan2(rotation_mat[1, 0], rotation_mat[0, 0]) * 180 / np.pi  # Yaw burchagini hisoblash
-                return abs(yaw) > 50, image_points  # Agar orqaga qarayotgan bo'lsa
+                
+                # Ko'z ma'lumotlarini olish
+                left_iris = landmarks[468]
+                right_iris = landmarks[473]
+                
+                # Ko'z atrofidagi nuqtalar (chegaralar uchun)
+                left_eye_indices = [33, 133, 159, 145]
+                right_eye_indices = [362, 263, 386, 374]
+                
+                def get_pt(idx): return (int(landmarks[idx].x * width), int(landmarks[idx].y * height))
+                
+                eye_data = {
+                    "left_iris": (int(left_iris.x * width), int(left_iris.y * height)),
+                    "right_iris": (int(right_iris.x * width), int(right_iris.y * height)),
+                    "left_eye_rect": cv2.boundingRect(np.array([get_pt(i) for i in left_eye_indices])),
+                    "right_eye_rect": cv2.boundingRect(np.array([get_pt(i) for i in right_eye_indices]))
+                }
+                
+                return abs(yaw) > 50, image_points, eye_data  # Agar orqaga qarayotgan bo'lsa
         except Exception as e:
             print(f"[ERROR] Bosh pozitsiyasini aniqlashda xatolik: {str(e)}")  # Xatolikni chiqarish
-            return False, None
-        return False, None
+            return False, None, None
+        return False, None, None
 
 import threading
 import time as time_module # time modulini qayta nomlaymiz, chunki pastda time() funksiyasi bor
@@ -438,7 +457,8 @@ def main():
             "phone_detected": False,
             "phone_confidence": 0.0,
             "backward_looking_status": [],
-            "landmarks": []
+            "landmarks": [],
+            "eye_data": []
         },
         "running": True,
         "lock": threading.Lock(),
@@ -490,6 +510,7 @@ def main():
                     face_names = []
                     backward_looking_status = []
                     all_landmarks = []
+                    all_eye_data = []
                     
                     for face_location in face_locations:
                         # 3. Yuzni tanish (Asl kadrda, lekin aniqlangan joylarda)
@@ -497,9 +518,10 @@ def main():
                         face_names.append(name)
                         
                         # 4. Bosh holatini aniqlash
-                        is_looking_backward, landmarks = face_system.detect_backward_looking(frame_to_process, face_location)
+                        is_looking_backward, landmarks, eye_data = face_system.detect_backward_looking(frame_to_process, face_location)
                         backward_looking_status.append(is_looking_backward)
                         all_landmarks.append(landmarks)
+                        all_eye_data.append(eye_data)
                         
                         # Qoidabuzarliklarni yozish
                         if phone_detected:
@@ -517,7 +539,8 @@ def main():
                             "phone_detected": phone_detected,
                             "phone_confidence": phone_confidence,
                             "backward_looking_status": backward_looking_status,
-                            "landmarks": all_landmarks
+                            "landmarks": all_landmarks,
+                            "eye_data": all_eye_data
                         }
                         shared_data["processing_time"] = time() - start_proc
                 except Exception as e:
@@ -609,12 +632,15 @@ def main():
         phone_confidence = current_results["phone_confidence"]
         backward_looking_status = current_results["backward_looking_status"]
         landmarks_list = current_results.get("landmarks", [])
+        eye_data_list = current_results.get("eye_data", [])
 
         # Ro'yxatlar uzunligi mos kelishini ta'minlash
         if len(landmarks_list) != len(face_locations):
              landmarks_list = [None] * len(face_locations)
+        if len(eye_data_list) != len(face_locations):
+             eye_data_list = [None] * len(face_locations)
 
-        for (top, right, bottom, left), name, is_looking_backward, landmarks in zip(face_locations, face_names, backward_looking_status, landmarks_list):
+        for (top, right, bottom, left), name, is_looking_backward, landmarks, eye_info in zip(face_locations, face_names, backward_looking_status, landmarks_list, eye_data_list):
             
             # Foydalanuvchi bloklangan yoki yo'qligini tekshirish
             is_blocked = face_system.is_blocked(name)
@@ -630,18 +656,30 @@ def main():
             cv2.rectangle(frame, (left, top), (right, bottom), color, 2)  # Yuzga to'rtburchak chizish
 
             # Debug rejimi: Yuz nuqtalarini chizish
-            if debug_mode and landmarks is not None:
-                for point in landmarks:
-                    cv2.circle(frame, (int(point[0]), int(point[1])), 3, (0, 255, 255), -1)
-                # Nuqtalarni tutashtiruvchi chiziqlar (vizualizatsiya uchun)
-                # Burun uchi
-                nose = (int(landmarks[0][0]), int(landmarks[0][1]))
-                # Ko'zlar
-                left_eye = (int(landmarks[2][0]), int(landmarks[2][1]))
-                right_eye = (int(landmarks[3][0]), int(landmarks[3][1]))
+            if debug_mode:
+                if landmarks is not None:
+                    for point in landmarks:
+                        cv2.circle(frame, (int(point[0]), int(point[1])), 3, (0, 255, 255), -1)
+                    # Nuqtalarni tutashtiruvchi chiziqlar (vizualizatsiya uchun)
+                    # Burun uchi
+                    nose = (int(landmarks[0][0]), int(landmarks[0][1]))
+                    # Ko'zlar
+                    left_eye = (int(landmarks[2][0]), int(landmarks[2][1]))
+                    right_eye = (int(landmarks[3][0]), int(landmarks[3][1]))
+                    
+                    cv2.line(frame, nose, left_eye, (255, 0, 0), 1)
+                    cv2.line(frame, nose, right_eye, (255, 0, 0), 1)
                 
-                cv2.line(frame, nose, left_eye, (255, 0, 0), 1)
-                cv2.line(frame, nose, right_eye, (255, 0, 0), 1)
+                if eye_info is not None:
+                    # Ko'z atrofini chizish (Cyan rangda)
+                    lx, ly, lw, lh = eye_info["left_eye_rect"]
+                    rx, ry, rw, rh = eye_info["right_eye_rect"]
+                    cv2.rectangle(frame, (lx, ly), (lx+lw, ly+lh), (255, 255, 0), 1)
+                    cv2.rectangle(frame, (rx, ry), (rx+rw, ry+rh), (255, 255, 0), 1)
+                    
+                    # Ko'z qorachig'ini chizish (Qizil rangda)
+                    cv2.circle(frame, eye_info["left_iris"], 2, (0, 0, 255), -1)
+                    cv2.circle(frame, eye_info["right_iris"], 2, (0, 0, 255), -1)
 
             label = f"Name: {name}"
             if is_blocked:
