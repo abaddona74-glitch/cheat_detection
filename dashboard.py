@@ -5,6 +5,7 @@ from PIL import Image, ImageTk
 import threading
 import mediapipe as mp
 import numpy as np
+import time
 
 class Dashboard:
     def __init__(self, root, face_system, video_stream):
@@ -63,7 +64,32 @@ class Dashboard:
         for name in self.face_system.known_face_names:
             listbox.insert("end", name)
             
-        ttk.Button(db_window, text="Close", command=db_window.destroy).pack(pady=5)
+        def delete_face():
+            selection = listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select a face to delete.")
+                return
+            
+            index = selection[0]
+            name = self.face_system.known_face_names[index]
+            
+            if messagebox.askyesno("Confirm", f"Are you sure you want to delete '{name}'?"):
+                # Remove from lists
+                del self.face_system.known_face_names[index]
+                del self.face_system.known_face_encodings[index]
+                
+                # Save changes
+                self.face_system.save_face_database()
+                
+                # Update UI
+                listbox.delete(index)
+                messagebox.showinfo("Success", f"Deleted '{name}' from database.")
+
+        btn_frame = ttk.Frame(db_window)
+        btn_frame.pack(pady=5)
+        
+        ttk.Button(btn_frame, text="Delete Selected", command=delete_face).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="Close", command=db_window.destroy).pack(side="left", padx=5)
 
     def open_register_window(self):
         reg_window = tk.Toplevel(self.root)
@@ -110,6 +136,10 @@ class Dashboard:
         mp_drawing_styles = mp.solutions.drawing_styles
         mp_face_mesh = mp.solutions.face_mesh
 
+        # Auto-capture variables
+        self.auto_capture_start_time = None
+        self.countdown_active = False
+
         # Video Loop for Preview
         def update_preview():
             if not reg_window.winfo_exists():
@@ -126,6 +156,7 @@ class Dashboard:
                 
                 status_text = "No face detected"
                 status_color = "red"
+                is_perfect = False
                 
                 if results.multi_face_landmarks:
                     for face_landmarks in results.multi_face_landmarks:
@@ -160,6 +191,41 @@ class Dashboard:
                         else:
                             status_text = "Perfect distance. Hold still."
                             status_color = "green"
+                            is_perfect = True
+
+                # Auto-capture Logic
+                name = name_entry.get().strip()
+                if is_perfect and name:
+                    if not self.countdown_active:
+                        self.countdown_active = True
+                        self.auto_capture_start_time = time.time()
+                    
+                    elapsed = time.time() - self.auto_capture_start_time
+                    countdown = 3 - int(elapsed)
+                    
+                    if countdown > 0:
+                        # Draw countdown
+                        cv2.putText(frame, str(countdown), (220, 180), cv2.FONT_HERSHEY_SIMPLEX, 4, (0, 255, 0), 5)
+                        status_text = f"Capturing in {countdown}..."
+                    else:
+                        # Capture!
+                        self.countdown_active = False
+                        self.auto_capture_start_time = None
+                        # Use the original frame from stream for better quality, but we need to ensure it's fresh
+                        # For simplicity, we use the current processed frame or fetch a new one
+                        # Let's fetch a fresh one to avoid drawing overlays on the saved face
+                        fresh_frame, _ = self.video_stream.read()
+                        if fresh_frame is not None:
+                             success, message = self.face_system.add_face(fresh_frame, name)
+                             if success:
+                                 messagebox.showinfo("Success", f"Face registered for {name}!")
+                                 reg_window.destroy()
+                                 return
+                             else:
+                                 messagebox.showerror("Error", message)
+                else:
+                    self.countdown_active = False
+                    self.auto_capture_start_time = None
 
                 # Update status label
                 status_label.config(text=status_text, foreground=status_color)

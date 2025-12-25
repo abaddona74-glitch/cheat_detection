@@ -303,11 +303,11 @@ class FaceRecognitionSystem:
                     "right_eye_points": [get_pt(i) for i in right_eye_indices]
                 }
                 
-                return abs(yaw) > 50, image_points, eye_data  # Agar orqaga qarayotgan bo'lsa
+                return abs(yaw) > 50, image_points, eye_data, results.multi_face_landmarks[0]  # Agar orqaga qarayotgan bo'lsa
         except Exception as e:
             print(f"[ERROR] Bosh pozitsiyasini aniqlashda xatolik: {str(e)}")  # Xatolikni chiqarish
-            return False, None, None
-        return False, None, None
+            return False, None, None, None
+        return False, None, None, None
 
 import threading
 import time as time_module # time modulini qayta nomlaymiz, chunki pastda time() funksiyasi bor
@@ -464,6 +464,11 @@ def main():
     # Asosiy oqim (UI) va Hisoblash oqimi (Processing) ni ajratamiz.
     # Bu FPS ni oshiradi, chunki UI hisob-kitob tugashini kutib o'tirmaydi.
     
+    # Mediapipe Drawing Utils
+    mp_drawing = mp.solutions.drawing_utils
+    mp_drawing_styles = mp.solutions.drawing_styles
+    mp_face_mesh = mp.solutions.face_mesh
+
     shared_data = {
         "frame": None,
         "results": {
@@ -473,7 +478,8 @@ def main():
             "phone_confidence": 0.0,
             "backward_looking_status": [],
             "landmarks": [],
-            "eye_data": []
+            "eye_data": [],
+            "face_mesh_landmarks": [] # To'liq mesh uchun
         },
         "running": True,
         "lock": threading.Lock(),
@@ -526,6 +532,7 @@ def main():
                     backward_looking_status = []
                     all_landmarks = []
                     all_eye_data = []
+                    all_mesh_landmarks = []
                     
                     for face_location in face_locations:
                         # 3. Yuzni tanish (Asl kadrda, lekin aniqlangan joylarda)
@@ -533,10 +540,11 @@ def main():
                         face_names.append(name)
                         
                         # 4. Bosh holatini aniqlash
-                        is_looking_backward, landmarks, eye_data = face_system.detect_backward_looking(frame_to_process, face_location)
+                        is_looking_backward, landmarks, eye_data, mesh_landmarks = face_system.detect_backward_looking(frame_to_process, face_location)
                         backward_looking_status.append(is_looking_backward)
                         all_landmarks.append(landmarks)
                         all_eye_data.append(eye_data)
+                        all_mesh_landmarks.append(mesh_landmarks)
                         
                         # Qoidabuzarliklarni yozish
                         if phone_detected:
@@ -555,7 +563,8 @@ def main():
                             "phone_confidence": phone_confidence,
                             "backward_looking_status": backward_looking_status,
                             "landmarks": all_landmarks,
-                            "eye_data": all_eye_data
+                            "eye_data": all_eye_data,
+                            "face_mesh_landmarks": all_mesh_landmarks
                         }
                         shared_data["processing_time"] = time() - start_proc
                 except Exception as e:
@@ -648,14 +657,17 @@ def main():
         backward_looking_status = current_results["backward_looking_status"]
         landmarks_list = current_results.get("landmarks", [])
         eye_data_list = current_results.get("eye_data", [])
+        mesh_landmarks_list = current_results.get("face_mesh_landmarks", [])
 
         # Ro'yxatlar uzunligi mos kelishini ta'minlash
         if len(landmarks_list) != len(face_locations):
              landmarks_list = [None] * len(face_locations)
         if len(eye_data_list) != len(face_locations):
              eye_data_list = [None] * len(face_locations)
+        if len(mesh_landmarks_list) != len(face_locations):
+             mesh_landmarks_list = [None] * len(face_locations)
 
-        for (top, right, bottom, left), name, is_looking_backward, landmarks, eye_info in zip(face_locations, face_names, backward_looking_status, landmarks_list, eye_data_list):
+        for (top, right, bottom, left), name, is_looking_backward, landmarks, eye_info, mesh_landmarks in zip(face_locations, face_names, backward_looking_status, landmarks_list, eye_data_list, mesh_landmarks_list):
             
             # Foydalanuvchi bloklangan yoki yo'qligini tekshirish
             is_blocked = face_system.is_blocked(name)
@@ -672,6 +684,22 @@ def main():
 
             # Debug rejimi: Yuz nuqtalarini chizish
             if debug_mode:
+                # To'liq meshni chizish
+                if mesh_landmarks is not None:
+                    mp_drawing.draw_landmarks(
+                        image=frame,
+                        landmark_list=mesh_landmarks,
+                        connections=mp_face_mesh.FACEMESH_TESSELATION,
+                        landmark_drawing_spec=None,
+                        connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_tesselation_style())
+                    
+                    mp_drawing.draw_landmarks(
+                        image=frame,
+                        landmark_list=mesh_landmarks,
+                        connections=mp_face_mesh.FACEMESH_CONTOURS,
+                        landmark_drawing_spec=None,
+                        connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style())
+
                 if landmarks is not None:
                     for point in landmarks:
                         cv2.circle(frame, (int(point[0]), int(point[1])), 3, (0, 255, 255), -1)
@@ -686,12 +714,6 @@ def main():
                     cv2.line(frame, nose, right_eye, (255, 0, 0), 1)
                 
                 if eye_info is not None:
-                    # Ko'z atrofini chizish (Cyan rangda)
-                    # lx, ly, lw, lh = eye_info["left_eye_rect"]
-                    # rx, ry, rw, rh = eye_info["right_eye_rect"]
-                    # cv2.rectangle(frame, (lx, ly), (lx+lw, ly+lh), (255, 255, 0), 1)
-                    # cv2.rectangle(frame, (rx, ry), (rx+rw, ry+rh), (255, 255, 0), 1)
-                    
                     # Ko'z konturlarini chizish (Nuqtalar bilan)
                     for pt in eye_info["left_eye_points"]:
                         cv2.circle(frame, pt, 1, (255, 255, 0), -1)
