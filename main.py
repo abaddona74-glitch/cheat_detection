@@ -288,8 +288,9 @@ class FaceRecognitionSystem:
                 right_iris = landmarks[473]
                 
                 # Ko'z atrofidagi nuqtalar (chegaralar uchun)
-                left_eye_indices = [33, 133, 159, 145]
-                right_eye_indices = [362, 263, 386, 374]
+                # Mediapipe FaceMesh indekslari
+                left_eye_indices = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7]
+                right_eye_indices = [362, 398, 384, 385, 386, 387, 388, 466, 263, 382, 381, 380, 374, 373, 390, 249]
                 
                 def get_pt(idx): return (int(landmarks[idx].x * width), int(landmarks[idx].y * height))
                 
@@ -297,7 +298,9 @@ class FaceRecognitionSystem:
                     "left_iris": (int(left_iris.x * width), int(left_iris.y * height)),
                     "right_iris": (int(right_iris.x * width), int(right_iris.y * height)),
                     "left_eye_rect": cv2.boundingRect(np.array([get_pt(i) for i in left_eye_indices])),
-                    "right_eye_rect": cv2.boundingRect(np.array([get_pt(i) for i in right_eye_indices]))
+                    "right_eye_rect": cv2.boundingRect(np.array([get_pt(i) for i in right_eye_indices])),
+                    "left_eye_points": [get_pt(i) for i in left_eye_indices],
+                    "right_eye_points": [get_pt(i) for i in right_eye_indices]
                 }
                 
                 return abs(yaw) > 50, image_points, eye_data  # Agar orqaga qarayotgan bo'lsa
@@ -437,6 +440,18 @@ def main():
         return
     else:
         print("[INFO] Camera started successfully.")
+
+    # --- DASHBOARD (Yangi UI) ---
+    from dashboard import show_dashboard
+    print("[INFO] Showing Dashboard...")
+    
+    # Dashboardni ko'rsatish (Start bosilmaguncha shu yerda turadi)
+    should_start = show_dashboard(face_system, video_stream)
+    
+    if not should_start:
+        print("[INFO] User cancelled/closed dashboard.")
+        video_stream.stop()
+        return
 
     training_mode = False  # O'qitish rejimi
     current_name = ""  # Joriy ism
@@ -672,11 +687,17 @@ def main():
                 
                 if eye_info is not None:
                     # Ko'z atrofini chizish (Cyan rangda)
-                    lx, ly, lw, lh = eye_info["left_eye_rect"]
-                    rx, ry, rw, rh = eye_info["right_eye_rect"]
-                    cv2.rectangle(frame, (lx, ly), (lx+lw, ly+lh), (255, 255, 0), 1)
-                    cv2.rectangle(frame, (rx, ry), (rx+rw, ry+rh), (255, 255, 0), 1)
+                    # lx, ly, lw, lh = eye_info["left_eye_rect"]
+                    # rx, ry, rw, rh = eye_info["right_eye_rect"]
+                    # cv2.rectangle(frame, (lx, ly), (lx+lw, ly+lh), (255, 255, 0), 1)
+                    # cv2.rectangle(frame, (rx, ry), (rx+rw, ry+rh), (255, 255, 0), 1)
                     
+                    # Ko'z konturlarini chizish (Nuqtalar bilan)
+                    for pt in eye_info["left_eye_points"]:
+                        cv2.circle(frame, pt, 1, (255, 255, 0), -1)
+                    for pt in eye_info["right_eye_points"]:
+                        cv2.circle(frame, pt, 1, (255, 255, 0), -1)
+
                     # Ko'z qorachig'ini chizish (Qizil rangda)
                     cv2.circle(frame, eye_info["left_iris"], 2, (0, 0, 255), -1)
                     cv2.circle(frame, eye_info["right_iris"], 2, (0, 0, 255), -1)
